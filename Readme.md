@@ -1,0 +1,10 @@
+Tipo de Dato,Ejemplo,¿Dónde se crea la tabla?
+Identidad,"Usuarios, Passwords, Emails, Fotos de Perfil",PORTAL (SSO)
+Roles Globales,¿Es Admin? ¿Es Jefe de Flota? ¿Está Bloqueado?,PORTAL (SSO)
+Negocio Construcción,"Proyectos, Asistencia, Bodega, Reportes de Obra",ORDEN_COMPRAS
+Permisos Específicos,¿Qué proyectos ve Patricio? (prod_acceso_proyectos),ORDEN_COMPRAS
+Negocio Flota,"Camiones, Mantenciones, Choferes asignados",FLOTA (Futura DB)
+
+cd modulo_construccion
+
+npm run dev
