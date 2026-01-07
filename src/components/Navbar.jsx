@@ -18,6 +18,7 @@ export default function Navbar() {
   
   // Estado para guardar la info del proyecto actual
   const [currentProject, setCurrentProject] = useState(null);
+  const [avance, setAvance] = useState(0);
 
   // EFECTO: Detectar si estamos dentro de un proyecto y cargar su data
   useEffect(() => {
@@ -32,6 +33,12 @@ export default function Navbar() {
           
           const data = await proyectosService.getById(match.params.projectId);
           setCurrentProject(data);
+          
+          // Cargar avance usando la función RPC
+          const kpi = await proyectosService.getAvanceGlobal(match.params.projectId);
+          if (kpi && kpi.porcentaje_avance !== undefined) {
+            setAvance(Number(kpi.porcentaje_avance) || 0);
+          }
         } catch (error) {
           console.error("Error cargando info de proyecto en navbar", error);
         }
@@ -40,6 +47,7 @@ export default function Navbar() {
     } else {
       // Si salimos a la home, limpiamos el proyecto actual
       setCurrentProject(null);
+      setAvance(0);
     }
   }, [location.pathname]);
 
@@ -77,7 +85,7 @@ export default function Navbar() {
                 <div className="flex items-center gap-2 mt-0.5">
                   <TrendingUp className="h-3 w-3 text-green-400" />
                   <span className="text-xs text-slate-400">
-                    Avance Actual: <span className="text-green-400 font-bold">0%</span> {/* Aquí conectaremos el real luego */}
+                    Avance Actual: <span className="text-green-400 font-bold">{Number.isFinite(avance) ? avance.toFixed(1).replace('.', ',') : '0,0'}%</span>
                   </span>
                 </div>
               </div>
@@ -119,7 +127,7 @@ export default function Navbar() {
                <div className="mb-4 pb-4 border-b border-slate-700">
                   <p className="text-xs text-slate-400 uppercase font-semibold mb-1">Proyecto Activo</p>
                   <p className="text-white font-bold text-lg">{currentProject.proyecto}</p>
-                  <p className="text-slate-300 text-sm">Avance: 0%</p>
+                  <p className="text-slate-300 text-sm">Avance: {Number.isFinite(avance) ? avance.toFixed(1).replace('.', ',') : '0,0'}%</p>
                </div>
             )}
             

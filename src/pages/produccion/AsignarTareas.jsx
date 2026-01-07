@@ -286,7 +286,7 @@ function AsignarTareas() {
     // Refrescar solo los EPs (más ligero que recargar todo)
     const refreshEPs = async () => {
         try {
-            const eps = await estadosPagoService.getBorradores(projectId)
+            const eps = await estadosPagoService.getAll(projectId)
             setEpsRawData(eps)
         } catch (err) { console.error('Error refrescando EPs', err) }
     }
@@ -571,8 +571,10 @@ function AsignarTareas() {
 
   const loadMateriales = async (provId, taskId) => {
       try {
+          // El projectId ya lo tienes disponible arriba gracias a useParams()
           const [disponibles, consumidos] = await Promise.all([
-              stockService.getMaterialesDisponibles(provId),
+              // 👇 AQUÍ ESTÁ EL CAMBIO IMPORTANTE: Agregamos projectId
+              stockService.getMaterialesDisponibles(provId, projectId), 
               stockService.getConsumosTarea(taskId)
           ])
           setMaterialesDisponibles(disponibles.map(m => ({

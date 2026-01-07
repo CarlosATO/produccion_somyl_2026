@@ -2,21 +2,29 @@
 const BASE_URL = import.meta.env.VITE_LOGISTICA_URL;
 const API_KEY = import.meta.env.VITE_LOGISTICA_KEY;
 
-// Verificación de seguridad para el desarrollador
 if (!BASE_URL || !API_KEY) {
     console.error("🚨 Faltan las credenciales de LOGÍSTICA en el archivo .env");
 }
 
 export const logisticaService = {
-    async getEntregasProveedor(proveedorId) {
+    // Recibimos el proyectoId como segundo argumento
+    async getEntregasProveedor(proveedorId, proyectoId) {
         if (!proveedorId) return [];
 
-        console.log("📡 Consultando Logística vía FETCH directo...");
+        console.log(`📡 Consultando Logística -> Prov: ${proveedorId} | Proy: ${proyectoId}`);
 
         try {
-            // 1. BUSCAR DOCUMENTOS (Cabeceras)
-            // Construimos la URL manualmente para evitar problemas de librería
-            const urlDocs = `${BASE_URL}/rest/v1/logis_outbound_documents?select=id&is_subcontract=eq.true&provider_id=eq.${proveedorId}`;
+            // 1. CONSTRUCCIÓN DE LA CONSULTA
+            // Filtros base: Solo guías de subcontrato y de este proveedor
+            let queryParams = `select=id&is_subcontract=eq.true&provider_id=eq.${proveedorId}`;
+            
+            // --- FILTRO CLAVE: PROYECTO ---
+            // Usamos la columna 'project_id' que confirmaste en la tabla
+            if (proyectoId) {
+                queryParams += `&project_id=eq.${proyectoId}`;
+            }
+
+            const urlDocs = `${BASE_URL}/rest/v1/logis_outbound_documents?${queryParams}`;
             
             const responseDocs = await fetch(urlDocs, {
                 method: 'GET',
@@ -35,17 +43,14 @@ export const logisticaService = {
 
             const docs = await responseDocs.json();
 
+            // Si no hay documentos para ESTE proyecto, retornamos vacío
             if (!docs || docs.length === 0) {
-                console.warn("⚠️ No se encontraron despachos para este proveedor.");
                 return [];
             }
 
-            // 2. BUSCAR ITEMS (Detalles)
-            // Extraemos los IDs de las guías encontradas
-            const docIds = docs.map(d => d.id).join(','); // "8,9,10"
+            // 2. BUSCAR LOS ITEMS (MATERIALES) DE ESAS GUÍAS
+            const docIds = docs.map(d => d.id).join(',');
             
-            // Hacemos la consulta de items filtrando por esos IDs
-            // Sintaxis de Supabase REST: outbound_document_id=in.(id1,id2,id3)
             const urlItems = `${BASE_URL}/rest/v1/logis_outbound_items?select=quantity,product:products(code,name,unit)&outbound_document_id=in.(${docIds})`;
 
             const responseItems = await fetch(urlItems, {
@@ -64,7 +69,7 @@ export const logisticaService = {
 
             const items = await responseItems.json();
 
-            // 3. FORMATEAR RESULTADO
+            // 3. LIMPIEZA DE DATOS
             const resultado = items.map(i => ({
                 codigo: i.product?.code,
                 nombre: i.product?.name,
@@ -72,16 +77,14 @@ export const logisticaService = {
                 cantidad: Number(i.quantity)
             }));
 
-            console.log("✅ Materiales obtenidos:", resultado);
             return resultado;
 
         } catch (error) {
-            console.error("🔥 Error Fatal FETCH:", error);
-            alert("Error de conexión con Logística: " + error.message);
+            console.error("🔥 Error Conexión Logística:", error);
+            // En caso de error de red, devolvemos vacío para no romper la app
             return [];
         }
     }
 };
 
-// Exportamos un objeto vacío para mantener compatibilidad si algo importa 'supabaseLogistica'
 export const supabaseLogistica = {};

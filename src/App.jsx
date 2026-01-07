@@ -10,6 +10,8 @@ import AsignarTareas from './pages/produccion/AsignarTareas';
 import Cubicacion from './pages/produccion/Cubicacion';
 import GestionZonas from './pages/produccion/GestionZonas';
 import GestionDescuentos from './pages/produccion/GestionDescuentos';
+import ResumenSubcontrato from './pages/produccion/reportes/ResumenSubcontrato';
+import ProduccionActividad from './pages/produccion/reportes/ProduccionActividad';
 
 // --- Placeholder Components ---
 const Reportes = () => <div className="p-5"><h1>Reportes</h1></div>;
@@ -70,6 +72,15 @@ function ProtectedLayout() {
           <Route
             path="/proyecto/:projectId/cubicaciones"
             element={<Cubicacion />}
+          />
+          {/* REPORTES */}
+          <Route
+            path="/proyecto/:projectId/reportes/resumen-subcontrato"
+            element={<ResumenSubcontrato />}
+          />
+          <Route
+            path="/proyecto/:projectId/reportes/produccion-actividad"
+            element={<ProduccionActividad />}
           />
           {/* Aquí agregaremos Zonas, Reportes, Avance... */}
 

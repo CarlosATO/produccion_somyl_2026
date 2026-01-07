@@ -49,7 +49,7 @@ const TimelineView = ({ tareas, proveedores, onEditTask, onResizeTask }) => {
       return moment(fechaStr.substring(0, 10), "YYYY-MM-DD");
   };
 
-  // 3. GENERAR FILAS
+  // 3. GENERAR FILAS AGRUPADAS POR ACTIVIDAD
   const proveedoresOrdenados = Object.keys(tareasPorProveedor).sort((a, b) => {
       const nombreA = mapaProveedores[a] || '';
       const nombreB = mapaProveedores[b] || '';
@@ -58,80 +58,98 @@ const TimelineView = ({ tareas, proveedores, onEditTask, onResizeTask }) => {
 
   proveedoresOrdenados.forEach(provId => {
       const listaTareas = tareasPorProveedor[provId];
-      listaTareas.sort((a, b) => (a.fecha_asignacion || '').localeCompare(b.fecha_asignacion || ''));
-
       const nombreProv = mapaProveedores[provId] || `ID: ${provId}`;
-      const totalTareas = listaTareas.length;
       const filaInicio = filaActual;
 
-      proveedorOverlays.push({
-          nombre: nombreProv,
-          filaInicio: filaInicio,
-          cantidadFilas: totalTareas
-      });
-
-      listaTareas.forEach((t, index) => {
+      // Agrupar tareas del mismo proveedor por nombre de actividad
+      const tareasPorActividad = {};
+      listaTareas.forEach(t => {
           let nombreActividad = 'Sin Descripción';
           if (t.actividad && t.actividad.nombre) nombreActividad = t.actividad.nombre;
           else if (t.sub_actividad && t.sub_actividad.nombre) nombreActividad = t.sub_actividad.nombre;
           else if (t.item) nombreActividad = t.item;
 
-          const esUltima = index === totalTareas - 1;
+          if (!tareasPorActividad[nombreActividad]) {
+              tareasPorActividad[nombreActividad] = [];
+          }
+          tareasPorActividad[nombreActividad].push(t);
+      });
+
+      // Ordenar actividades alfabéticamente
+      const actividadesOrdenadas = Object.keys(tareasPorActividad).sort();
+      const totalFilasProveedor = actividadesOrdenadas.length;
+
+      // Crear UNA FILA por actividad (en lugar de una por tarea)
+      actividadesOrdenadas.forEach((nombreActividad, actIndex) => {
+          const tareasDeActividad = tareasPorActividad[nombreActividad];
+          const esUltima = actIndex === totalFilasProveedor - 1;
+
+          // Crear un ID único para el grupo (fila)
+          const grupoId = `${provId}-${nombreActividad}`;
 
           groups.push({
-              id: t.id,
+              id: grupoId,
               title: nombreActividad,
               customData: { esUltima, proveedorId: provId },
               height: ROW_HEIGHT
           });
 
-          const start = parseFecha(t.fecha_asignacion);
-          if (start) {
-              hasTasks = true;
-              if (start.isBefore(minDate)) minDate = start.clone();
+          // Crear MÚLTIPLES ITEMS (barras) en la MISMA FILA para cada tarea
+          tareasDeActividad.forEach(t => {
+              const start = parseFecha(t.fecha_asignacion);
+              if (start) {
+                  hasTasks = true;
+                  if (start.isBefore(minDate)) minDate = start.clone();
 
-              const fechaFinRaw = t.fecha_estimada_termino;
-              const end = fechaFinRaw 
-                  ? parseFecha(fechaFinRaw).add(1, 'day') 
-                  : start.clone().add(1, 'day');
+                  const fechaFinRaw = t.fecha_estimada_termino;
+                  const end = fechaFinRaw 
+                      ? parseFecha(fechaFinRaw).add(1, 'day') 
+                      : start.clone().add(1, 'day');
 
-              let bgColor = '#10b981'; 
-              let borderColor = '#047857';
+                  let bgColor = '#10b981'; 
+                  let borderColor = '#047857';
 
-              if (['PAGADA', 'EMITIDO'].includes(t.estado)) {
-                  bgColor = '#6b7280'; borderColor = '#374151';
-              } else if (t.estado === 'ASIGNADA') {
-                  bgColor = '#f59e0b'; borderColor = '#d97706';
-              }
-
-              // Permitir resize solo si NO está pagada
-              const canResizeThis = !['PAGADA', 'EMITIDO'].includes(t.estado);
-
-              items.push({
-                  id: t.id,
-                  group: t.id,
-                  title: nombreActividad,
-                  start_time: start,
-                  end_time: end,
-                  canMove: false,
-                  canResize: canResizeThis ? 'both' : false,
-                  bgColor: bgColor,
-                  borderColor: borderColor,
-                  itemProps: {
-                      style: {
-                          background: bgColor,
-                          borderColor: borderColor,
-                          color: 'white',
-                          borderRadius: '4px',
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          cursor: 'pointer'
-                      }
+                  if (['PAGADA', 'EMITIDO'].includes(t.estado)) {
+                      bgColor = '#6b7280'; borderColor = '#374151';
+                  } else if (t.estado === 'ASIGNADA') {
+                      bgColor = '#f59e0b'; borderColor = '#d97706';
                   }
-              });
-          }
+
+                  // Permitir resize solo si NO está pagada
+                  const canResizeThis = !['PAGADA', 'EMITIDO'].includes(t.estado);
+
+                  items.push({
+                      id: t.id,
+                      group: grupoId,  // Todas las tareas de la misma actividad van al mismo grupo
+                      title: nombreActividad,
+                      start_time: start,
+                      end_time: end,
+                      canMove: false,
+                      canResize: canResizeThis ? 'both' : false,
+                      bgColor: bgColor,
+                      borderColor: borderColor,
+                      itemProps: {
+                          style: {
+                              background: bgColor,
+                              borderColor: borderColor,
+                              color: 'white',
+                              borderRadius: '4px',
+                              borderWidth: '1px',
+                              borderStyle: 'solid',
+                              cursor: 'pointer'
+                          }
+                      }
+                  });
+              }
+          });
 
           filaActual++;
+      });
+
+      proveedorOverlays.push({
+          nombre: nombreProv,
+          filaInicio: filaInicio,
+          cantidadFilas: totalFilasProveedor
       });
   });
 
