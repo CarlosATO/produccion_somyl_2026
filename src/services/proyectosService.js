@@ -1,7 +1,14 @@
 // 1. IMPORTANTE: Importar el cliente de Supabase
 import { supabase } from './supabaseClient'; 
 
-const API_BASE = '/api/proyectos'; 
+// En producción, usar la URL del backend; en desarrollo, usar proxy local
+const API_BASE = import.meta.env.VITE_BACKEND_URL 
+  ? `${import.meta.env.VITE_BACKEND_URL}/api/proyectos`
+  : '/api/proyectos';
+
+const ACCESOS_BASE = import.meta.env.VITE_BACKEND_URL
+  ? `${import.meta.env.VITE_BACKEND_URL}/api/mis-accesos`
+  : '/api/mis-accesos';
 
 export const proyectosService = {
   // 1. Obtener TODOS los proyectos (Backend Python)
@@ -32,7 +39,7 @@ export const proyectosService = {
   // 2. Obtener MIS permisos (Backend Python)
   async getMisAccesos(userId) {
     try {
-      const response = await fetch(`/api/mis-accesos/${userId}`, {
+      const response = await fetch(`${ACCESOS_BASE}/${userId}`, {
         credentials: 'include'
       });
       

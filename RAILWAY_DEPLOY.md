@@ -28,9 +28,14 @@ VITE_LOGISTICA_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs
 VITE_SUPABASE_LOGISTICA_URL=https://meskxoyxhbvnataavkkh.supabase.co
 VITE_SUPABASE_LOGISTICA_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lc2t4b3l4aGJ2bmF0YWF2a2toIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc0MTY3MzcsImV4cCI6MjA2Mjk5MjczN30.515W1Jy3BMTXwl5bcDFivVdNhGKsdv-v-FFDrD_MjO4
 
+# Backend API (Portal SSO - IMPORTANTE!)
+VITE_BACKEND_URL=https://[TU-PORTAL-SSO-BACKEND].up.railway.app
+
 # Portal SSO (URL del portal para regresar si no hay token)
 VITE_PORTAL_URL=https://[TU-PORTAL-SSO].up.railway.app
 ```
+
+**NOTA IMPORTANTE**: La variable `VITE_BACKEND_URL` debe apuntar al servicio backend del portal_sso donde están los endpoints `/api/proyectos`, `/api/mis-accesos`, etc.
 
 ### 5. Networking
 - **Public Networking**: Habilitado
