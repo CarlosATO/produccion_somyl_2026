@@ -1,3 +1,0 @@
-# No Python dependencies required for the frontend module `modulo_construccion`.
-# Node dependencies are declared in package.json and should be installed with npm/yarn.
-# If you need to add Python requirements for other parts, list them here.
