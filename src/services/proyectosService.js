@@ -74,7 +74,11 @@ export const proyectosService = {
     try {
       if (!id) throw new Error('getById: id requerido')
 
-      const response = await fetch(API_BASE, { credentials: 'include' })
+      const response = await fetch(API_BASE, {
+        headers: getAuthHeaders(),
+        credentials: import.meta.env.VITE_BACKEND_URL ? 'omit' : 'include'
+      });
+      
       if (!response.ok) throw new Error('Error cargando proyectos desde el servidor')
 
       const proyectos = await response.json()
