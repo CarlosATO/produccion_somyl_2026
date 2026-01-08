@@ -10,12 +10,27 @@ const ACCESOS_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/mis-accesos`
   : '/api/mis-accesos';
 
+// Helper para obtener headers con autenticación
+function getAuthHeaders() {
+  const token = localStorage.getItem('sso_token');
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+}
+
 export const proyectosService = {
   // 1. Obtener TODOS los proyectos (Backend Python)
   async getProyectos() {
     try {
       const response = await fetch(API_BASE, {
-        credentials: 'include'  
+        headers: getAuthHeaders(),
+        credentials: import.meta.env.VITE_BACKEND_URL ? 'omit' : 'include'  // En producción no usar cookies
       });
 
       if (response.status === 401) {
@@ -40,7 +55,8 @@ export const proyectosService = {
   async getMisAccesos(userId) {
     try {
       const response = await fetch(`${ACCESOS_BASE}/${userId}`, {
-        credentials: 'include'
+        headers: getAuthHeaders(),
+        credentials: import.meta.env.VITE_BACKEND_URL ? 'omit' : 'include'
       });
       
       if (!response.ok) return [];
