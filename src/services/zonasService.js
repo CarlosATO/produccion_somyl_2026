@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import COMUNAS_CHILE from '../data/comunasChile'
 
 export const zonasService = {
 
@@ -15,9 +16,17 @@ export const zonasService = {
   },
 
   async crearZona(zona) {
+    // Normalizar comuna si viene en zona
+    const payload = { ...zona }
+    if (payload.comuna) {
+      const match = COMUNAS_CHILE.find(c => c.toLowerCase() === String(payload.comuna).trim().toLowerCase())
+      if (match) payload.comuna = match
+      else payload.comuna = String(payload.comuna).trim()
+    }
+
     const { data, error } = await supabase
       .from('prod_zonas')
-      .insert(zona)
+      .insert(payload)
       .select()
       .single()
     if (error) throw error
@@ -33,34 +42,22 @@ export const zonasService = {
   // --- TRAMOS ---
 
   async getTramos(zonaId) {
-    console.log("Intentando cargar tramos para Zona ID:", zonaId);
-    
     const { data, error } = await supabase
       .from('prod_tramos')
       .select('*')
       .eq('zona_id', zonaId)
       .order('id', { ascending: true })
-    
-    if (error) {
-      console.error("🔥 ERROR REAL DE SUPABASE (GET):", error.message, error.details, error.hint);
-      throw error
-    }
+    if (error) throw error
     return data
   },
 
   async crearTramo(tramo) {
-    console.log("Enviando tramo a crear:", tramo);
-    
     const { data, error } = await supabase
       .from('prod_tramos')
       .insert(tramo)
       .select()
       .single()
-      
-    if (error) {
-       console.error("🔥 ERROR REAL DE SUPABASE (POST):", error.message, error.details, error.hint);
-       throw error
-    }
+    if (error) throw error
     return data
   },
 
@@ -70,34 +67,26 @@ export const zonasService = {
     return true
   },
 
-  // --- IMPORTACIÓN MASIVA ---
+  // --- IMPORTACIÓN MASIVA (CON GEO) ---
 
   async importarZonasMasivas(proyectoId, zonasEstructuradas) {
-    // Nueva estructura esperada de 'zonasEstructuradas': 
-    // [ 
-    //   { 
-    //     nombre: "P-101023", 
-    //     direccion: "Calle Falsa 123", 
-    //     comuna: "Santiago", 
-    //     hp: "HP123", 
-    //     tramos: ["Tramo A", "Tramo B"] 
-    //   }, 
-    //   ... 
-    // ]
+    // Estructura: { nombre, direccion, comuna, hp, geo_lat, geo_lon, tramos: [] }
     
     const errores = [];
     let procesados = 0;
 
     for (const item of zonasEstructuradas) {
       try {
-        // 1. Crear la Zona con sus nuevos atributos
-        // Convertimos cadenas vacías a null para mantener la BD limpia
+        // 1. Crear la Zona con sus nuevos atributos GEO
         const zonePayload = {
             proyecto_id: proyectoId, 
             nombre: item.nombre,
             direccion: item.direccion || null,
             comuna: item.comuna || null,
-            hp: item.hp || null
+            hp: item.hp || null,
+            // NUEVOS CAMPOS
+            geo_lat: item.geo_lat || null,
+            geo_lon: item.geo_lon || null
         };
 
         const { data: zonaData, error: zonaError } = await supabase
@@ -110,10 +99,8 @@ export const zonasService = {
 
         const zonaId = zonaData.id;
 
-        // 2. Crear los Tramos asociados (si tiene)
-        // (Esta parte no cambia, los tramos siguen siendo solo nombres asociados a la zona ID)
+        // 2. Crear los Tramos asociados
         if (item.tramos && item.tramos.length > 0) {
-          // Filtramos tramos vacíos por seguridad
           const validTramos = item.tramos.filter(t => t && t.trim().length > 0);
           
           if(validTramos.length > 0) {
@@ -134,7 +121,6 @@ export const zonasService = {
 
       } catch (err) {
         console.error(`Error importando zona ${item.nombre}:`, err);
-        // Agregamos detalles del error si es de Supabase
         const errorMsg = err.details || err.message || 'Error desconocido';
         errores.push({ zona: item.nombre, error: errorMsg });
       }

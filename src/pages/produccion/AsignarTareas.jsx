@@ -69,6 +69,20 @@ function AsignarTareas() {
   const [cantidadAsignada, setCantidadAsignada] = useState('') // Plan
   const [cantidadReal, setCantidadReal] = useState('')         // Ejecutado
 
+    // --- NUEVOS ESTADOS DE EJECUCIÓN ---
+    const [puntaInicio, setPuntaInicio] = useState('')
+    const [puntaFinal, setPuntaFinal] = useState('')
+
+    // Estados para Geolocalización
+    const [showGeoModal, setShowGeoModal] = useState(false)
+    const [geoData, setGeoData] = useState({
+            coords: '',
+            lat: '',
+            lon: '',
+            foto: null,
+            fotoUrl: null
+    })
+
   const [archivo, setArchivo] = useState(null)
   const [archivoUrlExistente, setArchivoUrlExistente] = useState(null)
   const [comentarios, setComentarios] = useState('')
@@ -315,6 +329,17 @@ function AsignarTareas() {
         let fileUrl = archivoUrlExistente
         if(archivo) fileUrl = await storageService.subirArchivo(archivo)
 
+        // 2. NUEVO: Subir Foto Geolocalización (Si se seleccionó una nueva)
+        let geoFotoFinalUrl = geoData.fotoUrl;
+        if (geoData.foto) {
+            try {
+                geoFotoFinalUrl = await storageService.subirArchivo(geoData.foto);
+            } catch (errGeo) {
+                console.error('Error subiendo foto geo', errGeo);
+                // no bloquear, dejamos la URL existente o null
+            }
+        }
+
         if (selectedEP) {
             await estadosPagoService.asignarDueño(selectedEP.value, selectedCuadrilla?.value || editingTask?.proveedor_id)
         }
@@ -345,6 +370,15 @@ function AsignarTareas() {
             fecha_estimada_termino: endDate,
             archivo_plano_url: fileUrl,
             comentarios_asignacion: comentarios,
+
+            // --- NUEVOS CAMPOS ---
+            punta_inicio: puntaInicio || null,
+            punta_final: puntaFinal || null,
+            geo_coords: geoData.coords || null,
+            geo_lat: geoData.lat || null,
+            geo_lon: geoData.lon || null,
+            geo_foto_url: geoFotoFinalUrl || null,
+            // ---------------------
 
             // AQUÍ USAMOS LA VARIABLE CALCULADA ARRIBA
             estado_pago_id: estadoPagoFinal 
@@ -412,6 +446,13 @@ function AsignarTareas() {
 
                 // 🔥 Borramos el OBJETO visual para que desaparezca la etiqueta "EP:..." de la tarjeta
                 updatedTask.estado_pago = null
+                // --- BORRADO VISUAL DE NUEVOS CAMPOS ---
+                updatedTask.punta_inicio = null;
+                updatedTask.punta_final = null;
+                updatedTask.geo_coords = null;
+                updatedTask.geo_lat = null;
+                updatedTask.geo_lon = null;
+                updatedTask.geo_foto_url = null;
             }
             
             // 3. (Opcional) Si pasa a REALIZADA, inicializamos en 0 visualmente
@@ -440,6 +481,14 @@ function AsignarTareas() {
             extraData.cantidad_real = null
             extraData.fecha_termino_real = null
             extraData.estado_pago_id = null 
+
+            // --- LIMPIEZA EN BD ---
+            extraData.punta_inicio = null;
+            extraData.punta_final = null;
+            extraData.geo_coords = null;
+            extraData.geo_lat = null;
+            extraData.geo_lon = null;
+            extraData.geo_foto_url = null;
 
             // ❌ La limpieza de consumos/materiales la realiza ahora el trigger en la DB
         }
@@ -509,6 +558,9 @@ function AsignarTareas() {
     setIsEditing(false); setEditingTask(null); setSelectedCuadrilla(null); setSelectedItem(null);
     setSelectedZona(null); setSelectedTramo(null); 
     setCantidadAsignada(''); setCantidadReal(''); // Reset ambos
+        setPuntaInicio(''); setPuntaFinal('');
+        setGeoData({ coords: '', lat: '', lon: '', foto: null, fotoUrl: null });
+        setShowGeoModal(false);
     setDateRange([null, null]);
     setComentarios(''); setArchivo(null); setArchivoUrlExistente(null); setSelectedEP(null);
         // Reset materiales visuales al crear nueva tarea
@@ -552,6 +604,19 @@ function AsignarTareas() {
     } else {
         setSelectedEP(null)
     }
+    // CARGAR PUNTAS
+    setPuntaInicio(task.punta_inicio || '');
+    setPuntaFinal(task.punta_final || '');
+
+    // CARGAR GEO
+    setGeoData({
+        coords: task.geo_coords || '',
+        lat: task.geo_lat || '',
+        lon: task.geo_lon || '',
+        foto: null,
+        fotoUrl: task.geo_foto_url || null
+    });
+    setShowGeoModal(false);
     // Si la tarea está en ejecución o terminada, cargamos materiales
     if (task.estado !== 'ASIGNADA') {
         loadMateriales(task.proveedor_id, task.id)
@@ -815,6 +880,7 @@ function AsignarTareas() {
                     {/* --- AQUÍ ESTÁ EL CAMBIO DE CANTIDADES SPLIT --- */}
                     {isExecutionPhase ? (
                         <>
+                            {/* CANTIDADES */}
                             <Col md={3}>
                                 <Form.Label className="small fw-bold text-muted">Cant. Asignada (Plan)</Form.Label>
                                 <Form.Control type="number" value={cantidadAsignada} disabled className="bg-light" />
@@ -826,14 +892,57 @@ function AsignarTareas() {
                                         value={cantidadReal} 
                                         onChange={e => setCantidadReal(e.target.value)} 
                                         className="border-success fw-bold" 
-                                        // 🔥 CAMBIO AQUÍ: Bloqueamos si está en APROBADA
                                         disabled={editingTask?.estado === 'APROBADA'}
-                                        // El autoFocus lo dejamos solo si es editable
                                         autoFocus={editingTask?.estado !== 'APROBADA'}
                                     />
                             </Col>
+
+                            {/* NUEVOS INPUTS: PUNTAS */}
+                            <Col md={3}>
+                                <Form.Label className="small fw-bold text-primary">Punta Inicio</Form.Label>
+                                <Form.Control 
+                                    size="sm"
+                                    placeholder="Ej: Poste 10" 
+                                    value={puntaInicio} 
+                                    onChange={e => setPuntaInicio(e.target.value)} 
+                                    disabled={editingTask?.estado === 'APROBADA'}
+                                />
+                            </Col>
+                            <Col md={3}>
+                                <Form.Label className="small fw-bold text-primary">Punta Final</Form.Label>
+                                <Form.Control 
+                                    size="sm"
+                                    placeholder="Ej: Cámara 2" 
+                                    value={puntaFinal} 
+                                    onChange={e => setPuntaFinal(e.target.value)} 
+                                    disabled={editingTask?.estado === 'APROBADA'}
+                                />
+                            </Col>
+
+                            {/* BOTÓN GEOLOCALIZACIÓN */}
+                            <Col md={12} className="mt-2">
+                                <div className="d-flex align-items-center gap-2 bg-light p-2 rounded border">
+                                    <Button 
+                                        variant={geoData.coords || geoData.fotoUrl || geoData.foto ? "success" : "outline-secondary"}
+                                        size="sm" 
+                                        onClick={() => setShowGeoModal(true)}
+                                        disabled={editingTask?.estado === 'APROBADA'}
+                                    >
+                                        <i className="bi bi-geo-alt-fill me-2"></i>
+                                        {geoData.coords || geoData.fotoUrl || geoData.foto ? "Datos Geo Cargados" : "Agregar Geolocalización"}
+                                    </Button>
+                                    
+                                    {(geoData.coords || geoData.lat) && (
+                                        <span className="small text-muted font-monospace text-truncate">
+                                            <i className="bi bi-pin-map me-1"></i>
+                                            {geoData.coords || `${geoData.lat}, ${geoData.lon}`}
+                                        </span>
+                                    )}
+                                </div>
+                            </Col>
                         </>
                     ) : (
+                        // ... (Caso normal 'Asignada') ...
                         <Col md={6}>
                             <Form.Label className="small fw-bold text-muted">Cantidad Asignada</Form.Label>
                             <Form.Control type="number" value={cantidadAsignada} onChange={e => setCantidadAsignada(e.target.value)} placeholder="0" />
@@ -956,6 +1065,83 @@ function AsignarTareas() {
                 </div>
             </Form>
         </Modal.Body>
+      </Modal>
+      {/* MODAL SECUNDARIO: GEOLOCALIZACIÓN */}
+      <Modal show={showGeoModal} onHide={() => setShowGeoModal(false)} centered size="sm">
+          <Modal.Header closeButton className="bg-light py-2">
+              <Modal.Title className="h6 fw-bold">Georreferencia</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+              <Form.Group className="mb-2">
+                  <Form.Label className="small text-muted mb-1">Coordenadas Completas</Form.Label>
+                  <Form.Control 
+                      size="sm" 
+                      placeholder="-33.455028, -70.659741"
+                      value={geoData.coords}
+                      onChange={e => {
+                          const val = e.target.value;
+                          setGeoData({...geoData, coords: val});
+                          if(val.includes(',')) {
+                              const [l, g] = val.split(',').map(s => s.trim());
+                              if(!isNaN(parseFloat(l)) && !isNaN(parseFloat(g))) {
+                                  setGeoData(prev => ({...prev, coords: val, lat: l, lon: g}));
+                              }
+                          }
+                      }}
+                  />
+                  <Form.Text className="text-muted" style={{fontSize: '0.7rem'}}>Copiar/Pegar desde Maps</Form.Text>
+              </Form.Group>
+              
+              <Row className="g-2 mb-2">
+                  <Col xs={6}>
+                      <Form.Label className="small text-muted mb-1">Latitud</Form.Label>
+                      <Form.Control size="sm" placeholder="-33.455" value={geoData.lat} onChange={e => setGeoData({...geoData, lat: e.target.value})} />
+                  </Col>
+                  <Col xs={6}>
+                      <Form.Label className="small text-muted mb-1">Longitud</Form.Label>
+                      <Form.Control size="sm" placeholder="-70.659" value={geoData.lon} onChange={e => setGeoData({...geoData, lon: e.target.value})} />
+                  </Col>
+              </Row>
+
+              {/* --- AQUÍ ESTÁ LA MAGIA DEL MAPA --- */}
+              {(geoData.lat && geoData.lon && !isNaN(parseFloat(geoData.lat)) && !isNaN(parseFloat(geoData.lon))) && (
+                  <div className="my-3 border rounded overflow-hidden shadow-sm position-relative">
+                      <div className="position-absolute top-0 start-0 m-2 badge bg-white text-primary shadow-sm border">
+                          <i className="bi bi-geo-alt-fill me-1 text-danger"></i>Ubicación Detectada
+                      </div>
+                      
+                      <iframe 
+                          width="100%" 
+                          height="180" 
+                          frameBorder="0" 
+                          style={{border:0}}
+                          allowFullScreen
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                          src={`https://maps.google.com/maps?q=${geoData.lat},${geoData.lon}&z=16&output=embed`}
+                      >
+                      </iframe>
+                  </div>
+              )}
+              {/* ----------------------------------- */}
+
+              <Form.Group className="mb-3 border-top pt-2">
+                  <Form.Label className="small fw-bold mb-1"><i className="bi bi-camera me-1"></i>Evidencia / Foto</Form.Label>
+                  <Form.Control type="file" size="sm" accept="image/*" onChange={e => setGeoData({...geoData, foto: e.target.files[0]})} />
+                  
+                  {/* Previsualización de FOTO (Igual que antes) */}
+                  {!geoData.foto && geoData.fotoUrl && (
+                      <div className="mt-2 text-center bg-light p-1 rounded position-relative">
+                          <img src={geoData.fotoUrl} alt="Geo Ref" style={{maxHeight: '100px', maxWidth: '100%'}} className="rounded"/>
+                          <div className="small text-success mt-1"><i className="bi bi-check-circle-fill me-1"></i>Evidencia Guardada</div>
+                      </div>
+                  )}
+              </Form.Group>
+          </Modal.Body>
+          <Modal.Footer className="py-1">
+              <Button size="sm" variant="secondary" onClick={() => setShowGeoModal(false)}>Cerrar</Button>
+              <Button size="sm" variant="primary" onClick={() => setShowGeoModal(false)}>Confirmar Datos</Button>
+          </Modal.Footer>
       </Modal>
     </div>
   )
