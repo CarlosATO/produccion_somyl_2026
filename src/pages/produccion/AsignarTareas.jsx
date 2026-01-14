@@ -100,6 +100,17 @@ function AsignarTareas() {
 
   useEffect(() => { loadInitialData() }, [projectId])
 
+    // Helper: construir prefijo limpio del proyecto para códigos EP
+    // El campo real de la tabla proyectos es "proyecto" (ej: "TCHFONSUR2023")
+    const getProyectoCodigoBase = () => {
+        // Prioridad: proyecto > codigo > nombre > projectId
+        const raw = proyectoInfo?.proyecto 
+            || proyectoInfo?.codigo 
+            || proyectoInfo?.nombre 
+            || String(projectId)
+        return String(raw).replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    }
+
     const loadInitialData = async () => {
         try {
                 // 🔥 CAMBIO: Usamos getAll en lugar de getBorradores para tener TODO en la variable principal
@@ -216,16 +227,8 @@ function AsignarTareas() {
       if(!editingTask) return
       if(!window.confirm(`¿Generar nuevo EP exclusivo para ${editingTask.proveedor?.nombre}?`)) return
       try {
-          // 1. Obtenemos el nombre o código del proyecto
-          // Si proyectoInfo.codigo existe, úsalo. Si no, usa el nombre.
-          let rawName = proyectoInfo?.codigo || proyectoInfo?.nombre || 'PROYECTO'
-          
-          // 2. LIMPIEZA: Quitamos espacios, guiones raros y pasamos a mayúsculas
-          // Ejemplo: "Casa de Verano" -> "CASADEVERANO"
-          const cleanName = rawName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
-          
-          // 3. Creamos el prefijo base: "EP-CASADEVERANO"
-          const codigoBase = `EP-${cleanName}`
+          // Obtener prefijo del proyecto (usa `proyectoInfo.codigo` preferente)
+          const codigoBase = `EP-${getProyectoCodigoBase()}`
 
           // 4. Llamamos al backend (que le agregará el -001, -002...)
           const newEp = await estadosPagoService.crearSiguiente(
@@ -499,10 +502,8 @@ function AsignarTareas() {
             const tareaActual = tareas.find(t => t.id === movedId);
             if (tareaActual) {
                 try {
-                    // 2. Obtenemos el nombre limpio del proyecto para el código
-                    let rawName = proyectoInfo?.codigo || proyectoInfo?.nombre || 'PROY';
-                    const cleanName = rawName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                    const codigoBase = `EP-${cleanName}`;
+                    // 2. Obtenemos el prefijo limpio del proyecto para el código
+                    const codigoBase = `EP-${getProyectoCodigoBase()}`;
 
                     // 3. LLAMADA MÁGICA: El backend busca huecos, crea o asigna
                     const epAsignado = await estadosPagoService.asignarBorradorAutomatico(
@@ -1162,7 +1163,7 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                                             {/* ... (Cabecera con fechas y badge EP igual que antes) ... */}
                                             <div className="d-flex justify-content-between align-items-center mb-2">
                                                 <Badge bg={id==='APROBADA'?'success':'light'} text={id==='APROBADA'?'white':'dark'} className="border fw-normal d-flex align-items-center gap-1"><i className="bi bi-calendar3"></i>{task.fecha_asignacion ? format(parseISO(task.fecha_asignacion), 'dd/MM') : '--'}</Badge>
-                                                {task.estado_pago && <Badge bg="dark" className="ms-2">EP: {task.estado_pago.codigo}</Badge>}
+                                                {task.estado_pago && <Badge bg="dark" className="ms-2">{task.estado_pago.codigo}</Badge>}
                                             </div>
 
                                             {/* ... (Cuerpo de la tarjeta igual que antes) ... */}
