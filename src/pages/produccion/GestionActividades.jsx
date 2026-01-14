@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react' 
 import { useParams, useNavigate } from 'react-router-dom'
-import { Modal, Button, Form, Table, Badge, Row, Col, InputGroup, Card } from 'react-bootstrap'
+import { Modal, Button, Form, Table, Badge, Row, Col, InputGroup, Card, Spinner } from 'react-bootstrap'
 import { actividadesService } from '../../services/actividadesService'
 import { cuadrillasService } from '../../services/cuadrillasService'
 
@@ -28,12 +28,18 @@ function GestionActividades() {
   const [itemType, setItemType] = useState('') 
   
   // --- FORMULARIOS ---
-  const [formDataAct, setFormDataAct] = useState({ nombre: '', unidad: 'UN', valor_venta: 0 })
-  const [formDataSub, setFormDataSub] = useState({ actividad_id: null, nombre: '', unidad: 'UN', valor_venta: 0 })
-  
-  // --- TARIFAS ---
-  const [tarifas, setTarifas] = useState([]) 
-  const [proveedores, setProveedores] = useState([]) 
+  const [formDataAct, setFormDataAct] = useState({ 
+      nombre: '', unidad: 'UN', valor_venta: 0, 
+      clasificacion: '', requiere_material: false 
+  })
+  const [formDataSub, setFormDataSub] = useState({ 
+      actividad_id: null, nombre: '', unidad: 'UN', valor_venta: 0, costo_referencia: 0, 
+      clasificacion: '', requiere_material: false 
+  })
+
+  // Tarifas
+  const [proveedores, setProveedores] = useState([])
+  const [tarifasActuales, setTarifasActuales] = useState([])
 
   useEffect(() => {
     loadData()
@@ -43,415 +49,414 @@ function GestionActividades() {
     setLoading(true)
     try {
       const data = await actividadesService.getActividades(projectId)
-      setActividades(data)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
+      setActividades(data || [])
+    } catch (err) { console.error(err) }
+    finally { setLoading(false) }
+  }
+
+  // --- HANDLERS ACTIVIDAD (PADRE) ---
+  const handleOpenActModal = (act = null) => {
+    if (act) {
+      setIsEditing(true)
+      setEditId(act.id)
+      setFormDataAct({ 
+          nombre: act.nombre, 
+          unidad: act.unidad, 
+          valor_venta: act.valor_venta,
+          clasificacion: act.clasificacion || '',
+          requiere_material: act.requiere_material || false
+      })
+    } else {
+      setIsEditing(false)
+      setFormDataAct({ nombre: '', unidad: 'UN', valor_venta: 0, clasificacion: '', requiere_material: false })
     }
-  }
-
-  // --- BUSCADOR ---
-  const filteredActividades = actividades.map(act => {
-    const parentMatch = act.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchingSubs = act.sub_actividades.filter(sub => 
-      sub.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    if (parentMatch) return act 
-    if (matchingSubs.length > 0) return { ...act, sub_actividades: matchingSubs }
-    return null
-  }).filter(item => item !== null)
-
-
-  // =======================================================
-  // GESTIÓN DE ACTIVIDADES (PADRES)
-  // =======================================================
-
-  const openNewActividad = () => {
-    setIsEditing(false)
-    setFormDataAct({ nombre: '', unidad: 'UN', valor_venta: 0 })
-    setShowActividadModal(true)
-  }
-
-  const openEditActividad = (act) => {
-    setIsEditing(true)
-    setEditId(act.id)
-    setFormDataAct({ 
-        nombre: act.nombre, 
-        unidad: act.unidad, 
-        valor_venta: act.valor_venta 
-    })
     setShowActividadModal(true)
   }
 
   const handleSaveActividad = async (e) => {
     e.preventDefault()
     try {
-      const payload = {
-        ...formDataAct,
-        valor_venta: Number(formDataAct.valor_venta) || 0,
-        proyecto_id: projectId
-      }
-
       if (isEditing) {
-        await actividadesService.actualizarActividad(editId, payload)
+        await actividadesService.actualizarActividad(editId, formDataAct)
       } else {
-        await actividadesService.crearActividad(payload)
+        await actividadesService.crearActividad({ ...formDataAct, proyecto_id: projectId, activo: true })
       }
-
       setShowActividadModal(false)
       loadData()
-    } catch (err) { alert('Error al guardar actividad') }
+    } catch (err) { alert('Error guardando actividad') }
   }
 
-  const handleDeleteActividad = async (id, nombre) => {
-    if (!window.confirm(`¿Estás seguro de ELIMINAR la actividad: "${nombre}"?\n\nSe borrarán también sus sub-tareas y tarifas.\n(Si ya tiene reportes o pagos asociados, el sistema bloqueará esta acción).`)) return
-
+  const handleDeleteActividad = async (id) => {
+    if (!window.confirm("¿Eliminar actividad?")) return
     try {
       await actividadesService.eliminarActividad(id)
       loadData()
-    } catch (err) {
-      alert(err.message)
+    } catch (err) { alert(err.message) }
+  }
+
+  // --- HANDLERS SUB-ACTIVIDAD (HIJO) ---
+  const handleOpenSubModal = (parent, sub = null) => {
+    setSelectedParent(parent)
+    if (sub) {
+      setIsEditing(true)
+      setEditId(sub.id)
+      setFormDataSub({ 
+          actividad_id: parent.id, 
+          nombre: sub.nombre, 
+          unidad: sub.unidad, 
+          valor_venta: sub.valor_venta, 
+          costo_referencia: sub.costo_referencia,
+          clasificacion: sub.clasificacion || '',
+          requiere_material: sub.requiere_material || false
+      })
+    } else {
+      setIsEditing(false)
+      setFormDataSub({ 
+          actividad_id: parent.id, 
+          nombre: '', 
+          unidad: 'UN', 
+          valor_venta: 0, 
+          costo_referencia: 0,
+          clasificacion: parent.clasificacion || '', 
+          requiere_material: parent.requiere_material || false 
+      })
     }
-  }
-
-
-  // =======================================================
-  // GESTIÓN DE SUB-ACTIVIDADES (HIJOS)
-  // =======================================================
-
-  const openNewSub = (actividadPadre) => {
-    setSelectedParent(actividadPadre)
-    setIsEditing(false)
-    setFormDataSub({ actividad_id: actividadPadre.id, nombre: '', unidad: 'UN', valor_venta: 0 })
     setShowSubModal(true)
   }
 
-  const openEditSub = (sub, actividadPadre) => {
-    setSelectedParent(actividadPadre)
-    setIsEditing(true)
-    setEditId(sub.id)
-    setFormDataSub({ 
-        actividad_id: actividadPadre.id,
-        nombre: sub.nombre, 
-        unidad: sub.unidad, 
-        valor_venta: sub.valor_venta 
-    })
-    setShowSubModal(true)
-  }
-
-  const handleSaveSub = async (e) => {
+  const handleSaveSubActividad = async (e) => {
     e.preventDefault()
     try {
-      const payload = {
-        ...formDataSub,
-        valor_venta: Number(formDataSub.valor_venta) || 0
-      }
-
       if (isEditing) {
-        await actividadesService.actualizarSubActividad(editId, payload)
+        await actividadesService.actualizarSubActividad(editId, formDataSub)
       } else {
-        await actividadesService.crearSubActividad(payload)
+        await actividadesService.crearSubActividad({ ...formDataSub, activo: true })
       }
-
       setShowSubModal(false)
       loadData()
-    } catch (err) { alert('Error al guardar sub-actividad') }
+    } catch (err) { alert('Error guardando sub-actividad') }
   }
 
-  const handleDeleteSub = async (id, nombre) => {
-    if (!window.confirm(`¿Eliminar la tarea: "${nombre}"?`)) return
+  const handleDeleteSubActividad = async (id) => {
+    if (!window.confirm("¿Eliminar sub-actividad?")) return
     try {
       await actividadesService.eliminarSubActividad(id)
       loadData()
-    } catch (err) {
-      alert(err.message)
-    }
+    } catch (err) { alert(err.message) }
   }
 
-
-  // =======================================================
-  // GESTIÓN DE TARIFAS (COSTOS)
-  // =======================================================
-
-  const openTarifasModal = async (item, type) => {
-    setSelectedItem(item)
-    setItemType(type)
-    setShowTarifasModal(true)
-    setTarifas([]) 
-    
-    // 1. Cargamos Cuadrillas
-    const cuadrillas = await cuadrillasService.getCuadrillasProyecto(projectId)
-    setProveedores(cuadrillas)
-
-    // 2. Cargamos Tarifas ya guardadas
-    const tarifasExistentes = await actividadesService.getTarifas(projectId, item.id, type)
-    setTarifas(tarifasExistentes)
-  }
-
-  const handleSaveTarifa = async (proveedorId, valor) => {
-    if (!valor) return
-    try {
-      const payload = {
-        proyecto_id: Number(projectId),
-        proveedor_id: proveedorId,
-        valor_costo: Number(valor) || 0
+  // --- HANDLERS TARIFAS ---
+  const handleOpenTarifas = async (item, type, parentName = '') => {
+      setSelectedItem(item)
+      setItemType(type)
+      try {
+          // Protección por si falla el servicio de cuadrillas
+          const provs = await cuadrillasService.getCuadrillasProyecto(projectId) || []
+          
+          const uniqueProvs = []
+          const map = new Map()
+          provs.forEach(c => {
+              if(c.proveedor && !map.has(c.proveedor.id)){
+                  map.set(c.proveedor.id, true)
+                  uniqueProvs.push(c)
+              }
+          })
+          setProveedores(uniqueProvs)
+          
+          const tarifs = await actividadesService.getTarifas(projectId, item.id, type) || []
+          setTarifasActuales(tarifs)
+          
+          setShowTarifasModal(true)
+      } catch (err) {
+          console.error("Error cargando tarifas/cuadrillas:", err)
+          alert("Error cargando datos de cuadrillas. Revisa la consola.")
       }
-      if (itemType === 'ACT') payload.actividad_id = selectedItem.id
-      else payload.sub_actividad_id = selectedItem.id
-
-      await actividadesService.setTarifaSegura(payload)
-      
-      const updated = await actividadesService.getTarifas(projectId, selectedItem.id, itemType)
-      setTarifas(updated)
-    } catch (err) { console.error(err) }
   }
 
-  const getTarifaValue = (proveedorId) => {
-    const t = tarifas.find(t => t.proveedor.id === proveedorId)
-    return t ? t.valor_costo : ''
+  const handleSaveTarifa = async (provId, valor) => {
+      try {
+          await actividadesService.setTarifaSegura({
+              proyecto_id: Number(projectId),
+              proveedor_id: provId,
+              actividad_id: itemType === 'ACT' ? selectedItem.id : null,
+              sub_actividad_id: itemType === 'SUB' ? selectedItem.id : null,
+              valor_costo: Number(valor)
+          })
+          const tarifs = await actividadesService.getTarifas(projectId, selectedItem.id, itemType)
+          setTarifasActuales(tarifs)
+      } catch(err) { console.error(err); alert("Error guardando tarifa") }
   }
 
+  const getTarifaValue = (provId) => {
+      const t = tarifasActuales.find(x => x.proveedor?.id === provId)
+      return t ? t.valor_costo : 0
+  }
 
-  // =======================================================
-  // RENDER
-  // =======================================================
+  // --- RENDER ---
+  const filteredAct = actividades.filter(a => {
+    const term = searchTerm.toLowerCase();
+    const nombreMatch = a.nombre?.toLowerCase().includes(term);
+    const clasifMatch = a.clasificacion?.toLowerCase().includes(term);
+    return nombreMatch || clasifMatch;
+  });
+
+  if (loading) return <div className="p-5 text-center"><Spinner animation="border" /></div>
+
   return (
     <div className="container-fluid py-3 px-4 bg-light min-vh-100">
       
       {/* HEADER */}
-      <div className="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+      <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-3">
         <div className="d-flex align-items-center gap-3">
-          <Button 
-            variant="outline-secondary" size="sm" onClick={() => navigate(`/proyecto/${projectId}`)}
-            className="rounded-circle d-flex align-items-center justify-content-center" style={{width: '32px', height: '32px'}}
-          >
-            <i className="bi bi-arrow-left"></i>
-          </Button>
-          <div>
-            <h5 className="fw-bold text-dark mb-0">Actividades y Tarifas</h5>
-            <small className="text-muted">Gestiona precios de venta y costos por contratista</small>
-          </div>
-        </div>
-
-        <div className="d-flex gap-2">
-          <InputGroup size="sm" style={{ width: '250px' }}>
-            <InputGroup.Text className="bg-white border-end-0"><i className="bi bi-search text-muted"></i></InputGroup.Text>
-            <Form.Control 
-              placeholder="Buscar..." className="border-start-0 ps-0"
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </InputGroup>
-          <Button variant="dark" size="sm" className="d-flex align-items-center gap-2 px-3" onClick={openNewActividad}>
-            <i className="bi bi-plus-lg"></i> Nueva Actividad
-          </Button>
-        </div>
-      </div>
-
-      {/* LISTA */}
-      <div className="row g-2">
-        {filteredActividades.length === 0 ? (
-          <div className="text-center py-5 text-muted">
-            <i className="bi bi-filter-circle display-6 mb-2 d-block opacity-50"></i>
-            No se encontraron actividades.
-          </div>
-        ) : (
-          filteredActividades.map(act => (
-            <Col xs={12} key={act.id}>
-              <Card className="border shadow-sm overflow-hidden" style={{ borderRadius: '8px' }}>
-                
-                {/* BARRA ACTIVIDAD PADRE */}
-                <div className="d-flex align-items-center bg-light border-bottom py-2 px-3">
-                  <div className="me-auto d-flex align-items-center gap-2">
-                    <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill">
-                      {act.unidad}
-                    </span>
-                    <span className="fw-bold text-dark small text-uppercase">{act.nombre}</span>
-                    <span className="text-muted small border-start ps-2 ms-1">
-                      Venta: <strong>${act.valor_venta}</strong>
-                    </span>
-                  </div>
-
-                  <div className="d-flex gap-2 align-items-center">
-                    
-                    {/* --- BOTÓN COSTOS PADRE (Resaltado en Naranja/Amarillo) --- */}
-                    <Button 
-                        variant="outline-warning" 
-                        size="sm" 
-                        className="text-dark fw-bold px-2"
-                        title="Gestionar Costos / Tarifas" 
-                        onClick={() => openTarifasModal(act, 'ACT')}
-                    >
-                      <i className="bi bi-coin me-1"></i> Costos
-                    </Button>
-
-                    <div className="vr opacity-25"></div>
-
-                    {/* Botones de Edición y Subtarea */}
-                    <Button variant="outline-secondary" size="sm" className="border-0" title="Editar" onClick={() => openEditActividad(act)}>
-                      <i className="bi bi-pencil"></i>
-                    </Button>
-                    <Button variant="outline-danger" size="sm" className="border-0" title="Eliminar" onClick={() => handleDeleteActividad(act.id, act.nombre)}>
-                      <i className="bi bi-trash"></i>
-                    </Button>
-                    
-                    <Button variant="primary" size="sm" className="ms-2" title="Agregar Sub-Tarea" onClick={() => openNewSub(act)}>
-                      <i className="bi bi-plus-circle-fill me-1"></i> Sub-Tarea
-                    </Button>
-                  </div>
-                </div>
-
-                {/* TABLA HIJOS */}
-                {act.sub_actividades?.length > 0 && (
-                  <Table size="sm" hover className="mb-0 small align-middle">
-                    <thead className="text-muted bg-white">
-                      <tr>
-                        <th style={{width: '20px'}}></th>
-                        <th>Sub-Actividad</th>
-                        <th style={{width: '80px'}}>Unidad</th>
-                        <th style={{width: '120px'}}>Venta</th>
-                        <th style={{width: '200px'}} className="text-end pe-3">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {act.sub_actividades.map(sub => (
-                        <tr key={sub.id}>
-                          <td className="text-end text-muted"><i className="bi bi-arrow-return-right"></i></td>
-                          <td className="fw-medium text-secondary">{sub.nombre}</td>
-                          <td><Badge bg="light" text="dark" className="border">{sub.unidad}</Badge></td>
-                          <td>${sub.valor_venta}</td>
-                          <td className="text-end pe-3">
-                            <div className="d-flex justify-content-end gap-1">
-                              
-                              {/* --- BOTÓN COSTOS HIJO (Resaltado) --- */}
-                              <Button 
-                                variant="light" 
-                                size="sm" 
-                                className="text-dark border border-warning px-2 me-2"
-                                title="Gestionar Tarifas de Subcontrato"
-                                onClick={() => openTarifasModal(sub, 'SUB')} 
-                              >
-                                <i className="bi bi-coin text-warning me-1"></i> Costos
-                              </Button>
-
-                              <Button variant="link" size="sm" className="p-0 text-decoration-none text-secondary me-2" onClick={() => openEditSub(sub, act)} title="Editar">
-                                <i className="bi bi-pencil"></i>
-                              </Button>
-                              <Button variant="link" size="sm" className="p-0 text-decoration-none text-danger" onClick={() => handleDeleteSub(sub.id, sub.nombre)} title="Eliminar">
-                                <i className="bi bi-trash"></i>
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                )}
-              </Card>
-            </Col>
-          ))
-        )}
-      </div>
-
-      {/* --- MODAL 1: ACTIVIDAD PADRE --- */}
-      <Modal show={showActividadModal} onHide={() => setShowActividadModal(false)} centered size="sm">
-        <Modal.Header closeButton className="py-2">
-            <Modal.Title className="h6">{isEditing ? 'Editar Actividad' : 'Nueva Actividad'}</Modal.Title>
-        </Modal.Header>
-        <Form onSubmit={handleSaveActividad}>
-          <Modal.Body>
-            <Form.Group className="mb-2">
-              <Form.Label className="small mb-1">Nombre</Form.Label>
-              <Form.Control size="sm" required type="text" value={formDataAct.nombre} onChange={e => setFormDataAct({...formDataAct, nombre: e.target.value})} />
-            </Form.Group>
-            <Row>
-              <Col xs={6}>
-                <Form.Group className="mb-2">
-                  <Form.Label className="small mb-1">Unidad</Form.Label>
-                  <Form.Control size="sm" required type="text" value={formDataAct.unidad} onChange={e => setFormDataAct({...formDataAct, unidad: e.target.value})} />
-                </Form.Group>
-              </Col>
-              <Col xs={6}>
-                <Form.Group className="mb-2">
-                  <Form.Label className="small mb-1">Venta ($)</Form.Label>
-                  <Form.Control size="sm" required type="number" value={formDataAct.valor_venta} onChange={e => setFormDataAct({...formDataAct, valor_venta: e.target.value})} />
-                </Form.Group>
-              </Col>
-            </Row>
-          </Modal.Body>
-          <Modal.Footer className="py-1">
-            <Button size="sm" variant="primary" type="submit">{isEditing ? 'Guardar Cambios' : 'Crear'}</Button>
-          </Modal.Footer>
-        </Form>
-      </Modal>
-
-      {/* --- MODAL 2: SUB-ACTIVIDAD --- */}
-      <Modal show={showSubModal} onHide={() => setShowSubModal(false)} centered size="sm">
-        <Modal.Header closeButton className="py-2 bg-light">
-          <div>
-            <Modal.Title className="h6 fw-bold">{isEditing ? 'Editar Tarea' : 'Nueva Sub-Actividad'}</Modal.Title>
-            <span className="small text-muted d-block">
-              De: <strong className="text-primary">{selectedParent?.nombre}</strong>
-            </span>
-          </div>
-        </Modal.Header>
-        <Form onSubmit={handleSaveSub}>
-          <Modal.Body>
-            <Form.Group className="mb-2">
-              <Form.Label className="small mb-1">Nombre Tarea</Form.Label>
-              <Form.Control size="sm" required type="text" value={formDataSub.nombre} onChange={e => setFormDataSub({...formDataSub, nombre: e.target.value})} />
-            </Form.Group>
-            <Row>
-              <Col xs={6}>
-                <Form.Group className="mb-2">
-                  <Form.Label className="small mb-1">Unidad</Form.Label>
-                  <Form.Control size="sm" required type="text" value={formDataSub.unidad} onChange={e => setFormDataSub({...formDataSub, unidad: e.target.value})} />
-                </Form.Group>
-              </Col>
-              <Col xs={6}>
-                <Form.Group className="mb-2">
-                  <Form.Label className="small mb-1">Venta ($)</Form.Label>
-                  <Form.Control size="sm" type="number" value={formDataSub.valor_venta} onChange={e => setFormDataSub({...formDataSub, valor_venta: e.target.value})} />
-                </Form.Group>
-              </Col>
-            </Row>
-          </Modal.Body>
-          <Modal.Footer className="py-1">
-            <Button size="sm" variant="primary" type="submit">{isEditing ? 'Actualizar' : 'Crear'}</Button>
-          </Modal.Footer>
-        </Form>
-      </Modal>
-
-      {/* --- MODAL 3: TARIFAS --- */}
-      <Modal show={showTarifasModal} onHide={() => setShowTarifasModal(false)} size="lg" centered>
-        <Modal.Header closeButton className="py-2 bg-light">
-          <div>
-            <Modal.Title className="h6 fw-bold">Tarifas por Cuadrilla</Modal.Title>
-            <span className="small text-muted">
-              Ítem: <strong>{selectedItem?.nombre}</strong>
-            </span>
-          </div>
-        </Modal.Header>
-        <Modal.Body className="p-0">
-          <div className="alert alert-warning m-2 py-2 px-3 small border-0 d-flex align-items-center">
-            <i className="bi bi-cash-coin fs-4 me-3"></i> 
+            <Button variant="outline-secondary" size="sm" onClick={() => navigate(`/proyecto/${projectId}`)} className="rounded-circle" style={{width:'32px', height:'32px'}}>
+                <i className="bi bi-arrow-left"></i>
+            </Button>
             <div>
-                <strong>Define los Costos de Subcontrato</strong><br/>
-                Solo las empresas con tarifa definida podrán reportar esta actividad en sus pagos.
+                <h5 className="fw-bold text-dark mb-0">Maestro de Actividades</h5>
+                <small className="text-muted">Precios y estructura.</small>
             </div>
-          </div>
-          <Table hover size="sm" className="mb-0 align-middle small">
-            <thead className="table-light">
-              <tr>
-                <th className="ps-3">Subcontratista</th>
-                <th>RUT</th>
-                <th style={{width: '180px'}} className="pe-3 text-end">Costo Pactado ($)</th>
-              </tr>
+        </div>
+        <div className="d-flex gap-2">
+            <Form.Control 
+                size="sm" placeholder="Buscar..." 
+                value={searchTerm} onChange={e => setSearchTerm(e.target.value)} 
+                style={{maxWidth: '200px'}}
+            />
+            <Button variant="primary" size="sm" onClick={() => handleOpenActModal()}>
+                <i className="bi bi-plus-lg me-2"></i>Nueva Actividad
+            </Button>
+        </div>
+      </div>
+
+      {/* TABLA PRINCIPAL */}
+      <Card className="shadow-sm border-0">
+        <Table hover responsive className="mb-0 align-middle">
+            <thead className="bg-light">
+                <tr>
+                    <th className="border-0 ps-4 text-secondary small">NOMBRE</th>
+                    <th className="border-0 text-secondary small">CLASIFICACIÓN</th>
+                    <th className="border-0 text-center text-secondary small">UNIDAD</th>
+                    <th className="border-0 text-end text-secondary small">PRECIO VENTA</th>
+                    <th className="border-0 text-center text-secondary small">REQ. MAT.</th>
+                    <th className="border-0 text-end pe-4 text-secondary small">ACCIONES</th>
+                </tr>
             </thead>
             <tbody>
-              {proveedores.length === 0 ? (
-                <tr><td colSpan="3" className="text-center py-4 text-muted">No hay cuadrillas habilitadas. Ve a "Cuadrillas" primero.</td></tr>
-              ) : (
+                {filteredAct.map(act => (
+                    <React.Fragment key={act.id}>
+                        {/* FILA PADRE */}
+                        <tr className="bg-white">
+                            <td className="ps-4 fw-bold text-dark">
+                                {act.nombre}
+                                {act.sub_actividades?.length > 0 && <Badge bg="light" text="dark" className="ms-2 border">{act.sub_actividades.length} Subs</Badge>}
+                            </td>
+                            <td>
+                                {act.clasificacion ? (
+                                    <Badge bg="secondary" className="bg-opacity-10 text-secondary border fw-normal">
+                                        {act.clasificacion}
+                                    </Badge>
+                                ) : <span className="text-muted small">-</span>}
+                            </td>
+                            <td className="text-center"><Badge bg="light" text="dark" className="border">{act.unidad}</Badge></td>
+                            <td className="text-end fw-bold text-success">${act.valor_venta.toLocaleString()}</td>
+                            <td className="text-center">
+                                {act.requiere_material ? 
+                                    <i className="bi bi-box-seam-fill text-primary" title="Requiere Materiales"></i> : 
+                                    <span className="text-muted opacity-25"><i className="bi bi-dash-lg"></i></span>
+                                }
+                            </td>
+                            <td className="text-end pe-4">
+                                <div className="d-flex justify-content-end gap-1">
+                                    <Button variant="outline-primary" size="sm" onClick={() => handleOpenSubModal(act)} title="Agregar Sub-Actividad"><i className="bi bi-diagram-2"></i></Button>
+                                    <Button variant="outline-success" size="sm" onClick={() => handleOpenTarifas(act, 'ACT')} title="Gestionar Tarifas"><i className="bi bi-currency-dollar"></i></Button>
+                                    <Button variant="outline-secondary" size="sm" onClick={() => handleOpenActModal(act)} title="Editar"><i className="bi bi-pencil"></i></Button>
+                                    <Button variant="outline-danger" size="sm" onClick={() => handleDeleteActividad(act.id)}><i className="bi bi-trash"></i></Button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        {/* FILAS HIJAS */}
+                        {act.sub_actividades?.map(sub => (
+                            <tr key={sub.id} className="bg-light bg-opacity-25">
+                                <td className="ps-5 small">
+                                    <i className="bi bi-arrow-return-right text-muted me-2"></i>{sub.nombre}
+                                </td>
+                                <td>
+                                    {sub.clasificacion ? (
+                                        <Badge bg="light" className="text-muted border fw-normal" style={{fontSize: '0.7em'}}>
+                                            {sub.clasificacion}
+                                        </Badge>
+                                    ) : (
+                                        <span className="text-muted small opacity-50">-</span>
+                                    )}
+                                </td>
+                                <td className="text-center small text-muted">{sub.unidad}</td>
+                                <td className="text-end small font-monospace">${sub.valor_venta.toLocaleString()}</td>
+                                <td className="text-center">
+                                    {sub.requiere_material ? 
+                                        <i className="bi bi-box-seam-fill text-primary small" title="Requiere Materiales"></i> : 
+                                        ''
+                                    }
+                                </td>
+                                <td className="text-end pe-4">
+                                    <div className="d-flex justify-content-end gap-1">
+                                        <Button variant="link" className="text-success p-0 px-1" onClick={() => handleOpenTarifas(sub, 'SUB', act.nombre)}><i className="bi bi-currency-dollar"></i></Button>
+                                        <Button variant="link" className="text-secondary p-0 px-1" onClick={() => handleOpenSubModal(act, sub)}><i className="bi bi-pencil"></i></Button>
+                                        <Button variant="link" className="text-danger p-0 px-1" onClick={() => handleDeleteSubActividad(sub.id)}><i className="bi bi-trash"></i></Button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </React.Fragment>
+                ))}
+            </tbody>
+        </Table>
+      </Card>
+
+      {/* MODAL ACTIVIDAD (PADRE) */}
+      <Modal show={showActividadModal} onHide={() => setShowActividadModal(false)} backdrop="static" centered>
+        <Modal.Header closeButton><Modal.Title>{isEditing ? 'Editar' : 'Nueva'} Actividad</Modal.Title></Modal.Header>
+        <Form onSubmit={handleSaveActividad}>
+            <Modal.Body>
+                <Row className="g-2">
+                    <Col md={12}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Nombre</Form.Label>
+                            <Form.Control autoFocus required type="text" value={formDataAct.nombre} onChange={e => setFormDataAct({...formDataAct, nombre: e.target.value})} />
+                        </Form.Group>
+                    </Col>
+                    
+                    <Col md={8}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Clasificación</Form.Label>
+                            <Form.Control 
+                                type="text" 
+                                placeholder="Ej: Obras Civiles, Ferretería..."
+                                value={formDataAct.clasificacion} 
+                                onChange={e => setFormDataAct({...formDataAct, clasificacion: e.target.value})} 
+                            />
+                        </Form.Group>
+                    </Col>
+                    <Col md={4} className="d-flex align-items-center pt-3">
+                         <Form.Check 
+                            type="switch"
+                            id="check-mat-act"
+                            label="Reporta Material?"
+                            className="fw-bold small text-primary"
+                            checked={formDataAct.requiere_material}
+                            onChange={e => setFormDataAct({...formDataAct, requiere_material: e.target.checked})}
+                         />
+                    </Col>
+
+                    <Col md={6}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Unidad</Form.Label>
+                            <Form.Select value={formDataAct.unidad} onChange={e => setFormDataAct({...formDataAct, unidad: e.target.value})}>
+                                <option value="UN">UN (Unidad)</option>
+                                <option value="M">M (Metros)</option>
+                                <option value="M2">M2 (Metros Cuadrados)</option>
+                                <option value="M3">M3 (Metros Cúbicos)</option>
+                                <option value="GL">GL (Global)</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Precio Venta ($)</Form.Label>
+                            <Form.Control type="number" value={formDataAct.valor_venta} onChange={e => setFormDataAct({...formDataAct, valor_venta: e.target.value})} />
+                        </Form.Group>
+                    </Col>
+                </Row>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={() => setShowActividadModal(false)}>Cancelar</Button>
+                <Button variant="primary" type="submit">Guardar</Button>
+            </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* MODAL SUB-ACTIVIDAD (HIJO) */}
+      <Modal show={showSubModal} onHide={() => setShowSubModal(false)} backdrop="static" centered>
+        <Modal.Header closeButton>
+            <Modal.Title className="h6">
+                {isEditing ? 'Editar' : 'Agregar'} Sub-Item a <span className="text-primary">{selectedParent?.nombre}</span>
+            </Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleSaveSubActividad}>
+            <Modal.Body>
+                <Row className="g-2">
+                    <Col md={12}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Nombre Sub-Actividad</Form.Label>
+                            <Form.Control autoFocus required type="text" value={formDataSub.nombre} onChange={e => setFormDataSub({...formDataSub, nombre: e.target.value})} />
+                        </Form.Group>
+                    </Col>
+                    
+                    <Col md={8}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Clasificación</Form.Label>
+                            <Form.Control 
+                                type="text" 
+                                placeholder="Ej: Cableado..."
+                                value={formDataSub.clasificacion} 
+                                onChange={e => setFormDataSub({...formDataSub, clasificacion: e.target.value})} 
+                            />
+                        </Form.Group>
+                    </Col>
+                    <Col md={4} className="d-flex align-items-center pt-3">
+                         <Form.Check 
+                            type="switch"
+                            id="check-mat-sub"
+                            label="Reporta Material?"
+                            className="fw-bold small text-primary"
+                            checked={formDataSub.requiere_material}
+                            onChange={e => setFormDataSub({...formDataSub, requiere_material: e.target.checked})}
+                         />
+                    </Col>
+
+                    <Col md={6}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Unidad</Form.Label>
+                            <Form.Select value={formDataSub.unidad} onChange={e => setFormDataSub({...formDataSub, unidad: e.target.value})}>
+                                <option value="UN">UN</option>
+                                <option value="M">M</option>
+                                <option value="M2">M2</option>
+                                <option value="GL">GL</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                        <Form.Group className="mb-2">
+                            <Form.Label className="small fw-bold">Precio Venta ($)</Form.Label>
+                            <Form.Control type="number" value={formDataSub.valor_venta} onChange={e => setFormDataSub({...formDataSub, valor_venta: e.target.value})} />
+                        </Form.Group>
+                    </Col>
+                    <Col md={12}>
+                        <div className="p-2 bg-warning bg-opacity-10 rounded border border-warning">
+                            <Form.Label className="small fw-bold mb-0">Costo Referencia (Interno)</Form.Label>
+                            <Form.Control size="sm" type="number" value={formDataSub.costo_referencia} onChange={e => setFormDataSub({...formDataSub, costo_referencia: e.target.value})} />
+                            <Form.Text className="text-muted x-small">Solo para estimaciones, no afecta cobros.</Form.Text>
+                        </div>
+                    </Col>
+                </Row>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={() => setShowSubModal(false)}>Cancelar</Button>
+                <Button variant="primary" type="submit">Guardar</Button>
+            </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* MODAL TARIFAS */}
+      <Modal show={showTarifasModal} onHide={() => setShowTarifasModal(false)} centered>
+        <Modal.Header closeButton><Modal.Title className="h6">Gestionar Tarifas: <span className="fw-bold">{selectedItem?.nombre}</span></Modal.Title></Modal.Header>
+        <Modal.Body className="p-0">
+          <Table striped hover size="sm" className="mb-0">
+            <thead className="bg-light">
+                <tr><th className="ps-3">Subcontratista</th><th>RUT</th><th className="text-end pe-3">Tarifa Pactada ($)</th></tr>
+            </thead>
+            <tbody>
+              {proveedores.length === 0 ? <tr><td colSpan="3" className="text-center p-3">No hay cuadrillas asignadas al proyecto.</td></tr> : (
                 proveedores.map(prov => {
                   const valorActual = getTarifaValue(prov.proveedor.id)
                   return (

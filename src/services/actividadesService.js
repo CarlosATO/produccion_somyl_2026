@@ -1,4 +1,3 @@
-// AJUSTA ESTA IMPORTACIÓN SEGÚN TU PROYECTO:
 import { supabase } from './supabaseClient'
 
 export const actividadesService = {
@@ -11,13 +10,14 @@ export const actividadesService = {
       .select(`
         *,
         sub_actividades:prod_sub_actividades (
-          id, nombre, unidad, valor_venta, costo_referencia, activo
+          *
         )
       `)
       .eq('proyecto_id', proyectoId)
       .eq('activo', true)
       .order('id', { ascending: true })
 
+    // Nota: El select de sub_actividades (*) traerá automáticamente clasificacion y requiere_material
     if (error) throw error
     return data
   },
@@ -32,7 +32,6 @@ export const actividadesService = {
     return data
   },
 
-  // NUEVO: Editar Actividad
   async actualizarActividad(id, cambios) {
     const { data, error } = await supabase
       .from('prod_actividades')
@@ -44,19 +43,14 @@ export const actividadesService = {
     return data
   },
 
-  // NUEVO: Eliminar Actividad
   async eliminarActividad(id) {
-    // Intentamos borrar. Si hay tablas dependientes (sin cascade), dará error.
     const { error } = await supabase
       .from('prod_actividades')
       .delete()
       .eq('id', id)
     
     if (error) {
-      // Código PostgreSQL 23503 = Violación de llave foránea (Tiene registros hijos)
-      if (error.code === '23503') {
-        throw new Error("No se puede eliminar: Esta actividad tiene registros asociados (Pagos, Reportes, etc).")
-      }
+      if (error.code === '23503') throw new Error("No se puede eliminar: Tiene registros asociados.")
       throw error
     }
     return true
@@ -74,7 +68,6 @@ export const actividadesService = {
     return data
   },
 
-  // NUEVO: Editar Sub-Actividad
   async actualizarSubActividad(id, cambios) {
     const { data, error } = await supabase
       .from('prod_sub_actividades')
@@ -86,19 +79,12 @@ export const actividadesService = {
     return data
   },
 
-  // NUEVO: Eliminar Sub-Actividad
   async eliminarSubActividad(id) {
     const { error } = await supabase
       .from('prod_sub_actividades')
       .delete()
       .eq('id', id)
-    
-    if (error) {
-      if (error.code === '23503') {
-        throw new Error("No se puede eliminar: Esta tarea tiene registros asociados.")
-      }
-      throw error
-    }
+    if (error) throw error
     return true
   },
 
@@ -144,12 +130,12 @@ export const actividadesService = {
         proveedor_id: payload.proveedor_id 
      }
      if(payload.actividad_id) match.actividad_id = payload.actividad_id
-     if(payload.sub_actividad_id) match.sub_actividad_id = payload.sub_actividad_id
+     else match.sub_actividad_id = payload.sub_actividad_id
 
+     // 1. Borrar anterior (si existe)
      await supabase.from('prod_tarifas').delete().match(match)
-
-     const { data, error } = await supabase.from('prod_tarifas').insert(payload).select()
-     if (error) throw error
-     return data
+     
+     // 2. Insertar nueva
+     return await this.guardarTarifa(payload)
   }
 }
