@@ -251,69 +251,164 @@ function GestionCuadrillas() {
         </Modal.Footer>
       </Modal>
 
-      {/* --- MODAL 2: TRABAJADORES (SIN CAMBIOS VISUALES MAYORES) --- */}
+      {/* --- MODAL 2: TRABAJADORES (MEJORADO) --- */}
       <Modal show={showWorkersModal} onHide={() => setShowWorkersModal(false)} size="lg" centered>
-        <Modal.Header closeButton className="bg-light">
+        <Modal.Header closeButton className="bg-gradient" style={{background: 'linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%)'}}>
           <div>
-            <Modal.Title className="fw-bold h5">Nómina de Trabajadores</Modal.Title>
-            <small className="text-primary fw-bold">{selectedCuadrilla?.proveedor?.nombre}</small>
+            <Modal.Title className="fw-bold h5 text-white d-flex align-items-center gap-2">
+              <i className="bi bi-people-fill"></i>
+              Nómina de Trabajadores
+            </Modal.Title>
+            <small className="text-white opacity-75">{selectedCuadrilla?.proveedor?.nombre}</small>
           </div>
         </Modal.Header>
         <Modal.Body className="p-0">
-          <div className="p-3 bg-white border-bottom">
-            <Form onSubmit={handleSaveWorker} className="row g-2 align-items-end">
-              <Col md={4}>
-                <Form.Label className="small text-muted mb-1">Nombre Completo</Form.Label>
-                <Form.Control size="sm" value={newWorker.nombre_completo} onChange={e => setNewWorker({...newWorker, nombre_completo: e.target.value})} required />
-              </Col>
-              <Col md={3}>
-                <Form.Label className="small text-muted mb-1">RUT</Form.Label>
-                <Form.Control size="sm" value={newWorker.rut} onChange={e => setNewWorker({...newWorker, rut: e.target.value})} required />
-              </Col>
-              <Col md={3}>
-                <Form.Label className="small text-muted mb-1">Cargo</Form.Label>
-                <Form.Select size="sm" value={newWorker.cargo} onChange={e => setNewWorker({...newWorker, cargo: e.target.value})}>
-                  <option value="">Seleccionar...</option>
-                  <option value="Maestro">Maestro</option>
-                  <option value="Ayudante">Ayudante</option>
-                  <option value="Capataz">Capataz</option>
-                  <option value="Jornal">Jornal</option>
-                  <option value="Chofer">Chofer</option>
-                  <option value="Soldador">Soldador</option>
-                </Form.Select>
-              </Col>
-              <Col md={2}>
-                <Button type="submit" size="sm" variant="success" className="w-100">Agregar</Button>
-              </Col>
+          {/* FORMULARIO AGREGAR */}
+          <div className="p-4 bg-light border-bottom">
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <i className="bi bi-person-plus-fill text-success fs-5"></i>
+              <span className="fw-bold text-dark">Agregar Nuevo Integrante</span>
+            </div>
+            <Form onSubmit={handleSaveWorker}>
+              <Row className="g-3 align-items-end">
+                <Col md={4}>
+                  <Form.Label className="small fw-bold text-muted mb-1">
+                    <i className="bi bi-person me-1"></i>Nombre Completo
+                  </Form.Label>
+                  <Form.Control 
+                    placeholder="Ej: Juan Pérez Soto"
+                    value={newWorker.nombre_completo} 
+                    onChange={e => setNewWorker({...newWorker, nombre_completo: e.target.value})} 
+                    required 
+                  />
+                </Col>
+                <Col md={3}>
+                  <Form.Label className="small fw-bold text-muted mb-1">
+                    <i className="bi bi-card-text me-1"></i>RUT
+                  </Form.Label>
+                  <Form.Control 
+                    placeholder="12.345.678-9"
+                    value={newWorker.rut} 
+                    onChange={e => setNewWorker({...newWorker, rut: e.target.value})} 
+                  />
+                </Col>
+                <Col md={3}>
+                  <Form.Label className="small fw-bold text-muted mb-1">
+                    <i className="bi bi-briefcase me-1"></i>Cargo
+                  </Form.Label>
+                  <Form.Select value={newWorker.cargo} onChange={e => setNewWorker({...newWorker, cargo: e.target.value})}>
+                    <option value="">Seleccionar...</option>
+                    <optgroup label="👷 Operaciones">
+                      <option value="Capataz">Capataz</option>
+                      <option value="Maestro">Maestro</option>
+                      <option value="Ayudante">Ayudante</option>
+                      <option value="Jornal">Jornal</option>
+                    </optgroup>
+                    <optgroup label="🔧 Especialistas">
+                      <option value="Soldador">Soldador</option>
+                      <option value="Electricista">Electricista</option>
+                      <option value="Mecánico">Mecánico</option>
+                      <option value="Operador Maquinaria">Operador Maquinaria</option>
+                    </optgroup>
+                    <optgroup label="📐 Técnicos">
+                      <option value="Dibujante">Dibujante</option>
+                      <option value="Topógrafo">Topógrafo</option>
+                      <option value="Técnico Eléctrico">Técnico Eléctrico</option>
+                      <option value="Técnico FTTH">Técnico FTTH</option>
+                    </optgroup>
+                    <optgroup label="🚗 Transporte">
+                      <option value="Chofer">Chofer</option>
+                      <option value="Gruero">Gruero</option>
+                    </optgroup>
+                    <optgroup label="📋 Supervisión">
+                      <option value="Supervisor">Supervisor</option>
+                      <option value="Jefe de Cuadrilla">Jefe de Cuadrilla</option>
+                      <option value="Prevencionista">Prevencionista</option>
+                    </optgroup>
+                  </Form.Select>
+                </Col>
+                <Col md={2}>
+                  <Button type="submit" variant="success" className="w-100 shadow-sm">
+                    <i className="bi bi-plus-lg me-1"></i>Agregar
+                  </Button>
+                </Col>
+              </Row>
             </Form>
           </div>
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            <Table hover className="mb-0 align-middle">
-              <thead className="table-light sticky-top">
-                <tr>
-                  <th className="ps-4">Nombre</th>
-                  <th>RUT</th>
-                  <th>Cargo</th>
-                  <th className="text-end pe-4"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {trabajadores.map(t => (
-                  <tr key={t.id}>
-                    <td className="ps-4 fw-medium">{t.nombre_completo}</td>
-                    <td>{t.rut}</td>
-                    <td><Badge bg="secondary" className="fw-normal">{t.cargo || 'S/D'}</Badge></td>
-                    <td className="text-end pe-4">
-                      <Button variant="light" size="sm" className="text-danger" onClick={() => handleDeleteWorker(t.id)}>
-                        <i className="bi bi-trash"></i>
-                      </Button>
-                    </td>
+
+          {/* LISTA DE TRABAJADORES */}
+          <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+            {trabajadores.length === 0 ? (
+              <div className="text-center py-5 text-muted">
+                <i className="bi bi-people display-4 opacity-25"></i>
+                <p className="mt-2 mb-0">No hay trabajadores registrados</p>
+                <small>Agrega integrantes usando el formulario superior</small>
+              </div>
+            ) : (
+              <Table hover className="mb-0 align-middle">
+                <thead className="table-light sticky-top">
+                  <tr>
+                    <th className="ps-4" style={{width: '40%'}}>Nombre</th>
+                    <th style={{width: '25%'}}>RUT</th>
+                    <th style={{width: '25%'}}>Cargo</th>
+                    <th className="text-end pe-4" style={{width: '10%'}}></th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
+                </thead>
+                <tbody>
+                  {trabajadores.map(t => (
+                    <tr key={t.id}>
+                      <td className="ps-4">
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center" style={{width: '32px', height: '32px'}}>
+                            <i className="bi bi-person-fill text-primary"></i>
+                          </div>
+                          <span className="fw-medium">{t.nombre_completo}</span>
+                        </div>
+                      </td>
+                      <td className="font-monospace text-muted">{t.rut || '—'}</td>
+                      <td>
+                        <Badge 
+                          bg={
+                            ['Capataz', 'Supervisor', 'Jefe de Cuadrilla'].includes(t.cargo) ? 'primary' :
+                            ['Dibujante', 'Topógrafo', 'Técnico Eléctrico', 'Técnico FTTH'].includes(t.cargo) ? 'info' :
+                            ['Soldador', 'Electricista', 'Mecánico'].includes(t.cargo) ? 'warning' :
+                            'secondary'
+                          } 
+                          className="fw-normal px-2 py-1"
+                        >
+                          {t.cargo || 'Sin cargo'}
+                        </Badge>
+                      </td>
+                      <td className="text-end pe-4">
+                        <Button 
+                          variant="outline-danger" 
+                          size="sm" 
+                          className="rounded-circle p-0" 
+                          style={{width: '28px', height: '28px'}}
+                          onClick={() => handleDeleteWorker(t.id)}
+                          title="Eliminar trabajador"
+                        >
+                          <i className="bi bi-trash"></i>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
           </div>
         </Modal.Body>
+        <Modal.Footer className="bg-light border-top py-2">
+          <div className="d-flex align-items-center justify-content-between w-100">
+            <small className="text-muted">
+              <i className="bi bi-info-circle me-1"></i>
+              Total: <strong>{trabajadores.length}</strong> trabajador{trabajadores.length !== 1 ? 'es' : ''}
+            </small>
+            <Button variant="secondary" size="sm" onClick={() => setShowWorkersModal(false)}>
+              Cerrar
+            </Button>
+          </div>
+        </Modal.Footer>
       </Modal>
     </div>
   )
