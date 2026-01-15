@@ -54,6 +54,10 @@ function AsignarTareas() {
   const [editingTask, setEditingTask] = useState(null)
   const [uploading, setUploading] = useState(false)
 
+  // --- NUEVOS ESTADOS PARA MULTI-ITEM ---
+  const [taskList, setTaskList] = useState([]) 
+  const [tempItem, setTempItem] = useState(null)
+
   // Form State
   const [inputType, setInputType] = useState('ACT')
   const [selectedCuadrilla, setSelectedCuadrilla] = useState(null)
@@ -113,26 +117,55 @@ function AsignarTareas() {
 
     const loadInitialData = async () => {
         try {
-                // 🔥 CAMBIO: Usamos getAll en lugar de getBorradores para tener TODO en la variable principal
-                const [t, c, a, z, p, todosLosEPs] = await Promise.all([
-                        tareasService.getTareas(projectId),
-                        cuadrillasService.getCuadrillasProyecto(projectId),
-                        actividadesService.getActividades(projectId),
-                        zonasService.getZonas(projectId),
-                        proyectosService.getById(projectId),
-                        estadosPagoService.getAll(projectId)
-                ])
+            // Cargamos cada servicio por separado para identificar fallos
+            let t = [], c = [], a = [], z = [], p = null, todosLosEPs = []
+            
+            // 1. Cuadrillas (Contratistas)
+            try {
+                c = await cuadrillasService.getCuadrillasProyecto(projectId)
+            } catch (e) { console.error('Error cargando cuadrillas:', e) }
+            
+            // 2. Actividades
+            try {
+                a = await actividadesService.getActividades(projectId)
+            } catch (e) { console.error('Error cargando actividades:', e) }
+            
+            // 3. Zonas
+            try {
+                z = await zonasService.getZonas(projectId)
+            } catch (e) { console.error('Error cargando zonas:', e) }
+            
+            // 4. Proyecto Info
+            try {
+                p = await proyectosService.getById(projectId)
+            } catch (e) { console.error('Error cargando proyecto:', e) }
+            
+            // 5. Estados de Pago
+            try {
+                todosLosEPs = await estadosPagoService.getAll(projectId)
+            } catch (e) { console.error('Error cargando EPs:', e) }
+            
+            // 6. Tareas
+            try {
+                t = await tareasService.getTareas(projectId)
+            } catch (e) { 
+                console.error('Error cargando tareas:', e) 
+                t = []
+            }
 
-                setTareas(t)
-                setCuadrillasOpts(c.map(x => ({ value: x.proveedor.id, label: x.proveedor.nombre })))
-                // Guardamos lista completa de proveedores (contiene email, telefono, rut, etc.)
-                const listaProvs = c.map(x => x.proveedor).filter(Boolean)
-                setProveedoresFull(listaProvs)
-                setZonasOpts(z.map(x => ({ value: x.id, label: x.nombre })))
-                setActividadesData(a)
-                setProyectoInfo(p)
-                setEpsRawData(todosLosEPs) // <--- Ahora contiene Borradores Y Emitidos
-        } catch (err) { console.error(err) }
+            // Aplicar datos a estados
+            setTareas(t || [])
+            setCuadrillasOpts((c || []).map(x => ({ value: x.proveedor?.id, label: x.proveedor?.nombre })).filter(x => x.value))
+            const listaProvs = (c || []).map(x => x.proveedor).filter(Boolean)
+            setProveedoresFull(listaProvs)
+            setZonasOpts((z || []).map(x => ({ value: x.id, label: x.nombre })))
+            setActividadesData(a || [])
+            setProyectoInfo(p)
+            setEpsRawData(todosLosEPs || [])
+            
+        } catch (err) { 
+            console.error('Error en loadInitialData:', err) 
+        }
         finally { setLoading(false) }
     }
 
@@ -183,43 +216,39 @@ function AsignarTareas() {
     } else { setTramosOpts([]) }
   }
 
-  // CEREBRO DE PRECIOS (Ajustado para usar Cantidad REAL si existe, o Asignada si no)
+  // CÁLCULO FINANCIERO (MULTI-ITEM)
   useEffect(() => {
-    setFinanzas({ costoUnit: 0, ventaUnit: 0, totalCosto: 0, totalVenta: 0, valid: false })
-    if(!selectedCuadrilla || !selectedItem) { setTarifaCheck({ checking: false, valido: false, msg: '' }); return }
-    setTarifaCheck(prev => ({ ...prev, checking: true, msg: 'Consultando...' }))
+    let totalC = 0
+    let totalV = 0
     
-    const calcular = async () => {
-        try {
-            const tarifas = await actividadesService.getTarifas(projectId, selectedItem.value, selectedItem.type)
-            const tarifaPactada = tarifas.find(t => t.proveedor.id === selectedCuadrilla.value)
-            
-            if(tarifaPactada) {
-                const costoU = Number(tarifaPactada.valor_costo)
-                const ventaU = Number(selectedItem.precioVenta) || 0
-                
-                // Si estamos editando una REALIZADA, el cálculo monetario se basa en lo REAL
-                // Si estamos en ASIGNADA, se basa en lo PLANIFICADO
-                const isRealPhase = isEditing && editingTask?.estado !== 'ASIGNADA'
-                const qtyToCalc = isRealPhase ? (Number(cantidadReal) || 0) : (Number(cantidadAsignada) || 0)
+    // Recorremos la lista de actividades agregadas para sumar
+    taskList.forEach(item => {
+        const isRealPhase = isEditing && editingTask?.estado !== 'ASIGNADA'
+        const qty = isRealPhase ? (Number(item.cantidad_real) || 0) : (Number(item.cantidad_asignada) || 0)
+        
+        totalC += (item.precio_costo || 0) * qty
+        totalV += (item.precio_venta || 0) * qty
+    })
+    
+    // Validamos si hay algo en la lista para dar el OK
+    const isValid = taskList.length > 0;
+    
+    setFinanzas({ 
+        costoUnit: 0, // Ya no aplica unitario global
+        ventaUnit: 0, 
+        totalCosto: totalC, 
+        totalVenta: totalV, 
+        valid: isValid 
+    })
+    
+    // Actualizamos el check visual
+    setTarifaCheck({ 
+        checking: false, 
+        valido: isValid, 
+        msg: isValid ? 'OK' : 'Agrega actividades' 
+    })
 
-                setFinanzas({ 
-                    costoUnit: costoU, 
-                    ventaUnit: ventaU, 
-                    totalCosto: costoU * qtyToCalc, 
-                    totalVenta: ventaU * qtyToCalc, 
-                    valid: true 
-                })
-                setTarifaCheck({ checking: false, valido: true, msg: 'Tarifa OK' })
-            } else {
-                setFinanzas(prev => ({...prev, valid: false}))
-                setTarifaCheck({ checking: false, valido: false, msg: 'Sin contrato' })
-            }
-        } catch(err) { console.error(err) }
-    }
-    const timer = setTimeout(calcular, 300)
-    return () => clearTimeout(timer)
-  }, [selectedCuadrilla, selectedItem, cantidadAsignada, cantidadReal, isEditing]) 
+  }, [taskList, isEditing, editingTask]) 
 
 
   // --- ACTIONS EP ---
@@ -246,8 +275,6 @@ function AsignarTareas() {
   const handleOpenGestion = (ep) => {
       // 1. Buscamos al proveedor en nuestra lista completa
       const datosExtra = proveedoresFull.find(p => p.id === ep.proveedor_id);
-
-      console.log("Inyectando datos al EP:", datosExtra);
 
       // 2. Creamos un objeto EP enriquecido
       const epConDatos = {
@@ -322,88 +349,114 @@ function AsignarTareas() {
       }
   }
 
-  // --- SAVE ---
+  // --- MANEJO DE ITEMS DE LA LISTA ---
+  const handleAddItem = async () => {
+      if(!tempItem || !selectedCuadrilla) return alert("Selecciona actividad y contratista primero")
+      
+      let precioCosto = 0
+      try {
+          const tarifas = await actividadesService.getTarifas(projectId, tempItem.value, tempItem.type)
+          const tarifaPactada = tarifas.find(t => t.proveedor.id === selectedCuadrilla.value)
+          if(tarifaPactada) precioCosto = Number(tarifaPactada.valor_costo)
+          else if(!window.confirm("⚠️ No hay tarifa pactada. ¿Agregar con costo $0?")) return
+      } catch(e) { console.error(e) }
+
+      const newItem = {
+          uniqueId: Date.now(),
+          value: tempItem.value,
+          label: tempItem.label,
+          type: tempItem.type,
+          precio_venta: tempItem.precioVenta,
+          precio_costo: precioCosto,
+          cantidad_asignada: 1, 
+          cantidad_real: 0,
+          data: tempItem.data // Guardamos la info completa (requiere_material, etc)
+      }
+      
+      setTaskList([...taskList, newItem])
+      setTempItem(null)
+  }
+
+  const handleRemoveItem = (uniqueId) => {
+      setTaskList(taskList.filter(i => i.uniqueId !== uniqueId))
+  }
+
+  const handleItemChange = (uniqueId, field, val) => {
+      setTaskList(taskList.map(i => i.uniqueId === uniqueId ? { ...i, [field]: val } : i))
+  }
+
+  // --- SAVE (MULTI-ITEM) ---
   const handleSave = async (e) => {
     e.preventDefault()
-    if(!finanzas.valid) return alert("Tarifa no válida.")
+    if(taskList.length === 0) return alert("Debes agregar al menos una actividad a la lista.")
+
+    // 1. VALIDACIÓN DE MATERIALES (Bloqueo Estricto)
+    const isExecution = editingTask?.estado && editingTask?.estado !== 'ASIGNADA';
+    if (isExecution) {
+        // Revisamos si ALGUNO de los items requiere material
+        const algunoRequiere = taskList.some(item => item.data?.requiere_material);
+        const tieneConsumos = consumosTarea.length > 0;
+
+        if (algunoRequiere && !tieneConsumos) {
+            alert("⚠️ BLOQUEO: Una de las actividades requiere material.\nDebes agregar materiales en la sección inferior antes de guardar.");
+            return;
+        }
+    }
 
     setUploading(true)
     try {
         let fileUrl = archivoUrlExistente
         if(archivo) fileUrl = await storageService.subirArchivo(archivo)
-
-        // 2. NUEVO: Subir Foto Geolocalización (Si se seleccionó una nueva)
+        
         let geoFotoFinalUrl = geoData.fotoUrl;
-        if (geoData.foto) {
-            try {
-                geoFotoFinalUrl = await storageService.subirArchivo(geoData.foto);
-            } catch (errGeo) {
-                console.error('Error subiendo foto geo', errGeo);
-                // no bloquear, dejamos la URL existente o null
-            }
-        }
+        if (geoData.foto) geoFotoFinalUrl = await storageService.subirArchivo(geoData.foto);
 
-        if (selectedEP) {
-            await estadosPagoService.asignarDueño(selectedEP.value, selectedCuadrilla?.value || editingTask?.proveedor_id)
-        }
+        if (selectedEP) await estadosPagoService.asignarDueño(selectedEP.value, selectedCuadrilla?.value || editingTask?.proveedor_id)
 
-        // 1. Calculamos el Estado de Pago correcto
-        let estadoPagoFinal = null;
-
-        if (showPaymentSection) {
-            // Si estamos en APROBADA (vemos el selector), usamos lo que el usuario eligió
-            estadoPagoFinal = selectedEP?.value || null;
-        } else {
-            // Si estamos en EJECUCIÓN o ASIGNADA (selector oculto),
-            // mantenemos el que ya tenía la tarea para no borrarlo accidentalmente.
-            estadoPagoFinal = editingTask?.estado_pago_id || null;
-        }
-
-        const payload = {
+        // Payload Cabecera (La tarea contenedora)
+        const payloadTarea = {
             proyecto_id: Number(projectId),
             proveedor_id: selectedCuadrilla?.value || editingTask?.proveedor_id,
             zona_id: selectedZona.value,
             tramo_id: selectedTramo?.value,
-            
-            cantidad_asignada: Number(cantidadAsignada),
-            
-            precio_costo_unitario: finanzas.costoUnit,
-            precio_venta_unitario: finanzas.ventaUnit,
             fecha_asignacion: startDate,
             fecha_estimada_termino: endDate,
             archivo_plano_url: fileUrl,
             comentarios_asignacion: comentarios,
-
-            // --- NUEVOS CAMPOS ---
+            estado_pago_id: editingTask?.estado_pago_id || selectedEP?.value || null,
             punta_inicio: puntaInicio || null,
             punta_final: puntaFinal || null,
             geo_coords: geoData.coords || null,
             geo_lat: geoData.lat || null,
             geo_lon: geoData.lon || null,
             geo_foto_url: geoFotoFinalUrl || null,
-            // ---------------------
-
-            // AQUÍ USAMOS LA VARIABLE CALCULADA ARRIBA
-            estado_pago_id: estadoPagoFinal 
+            
+            // Valores globales en 0 o resumen (la data real está en los items)
+            cantidad_asignada: 0, 
+            precio_costo_unitario: 0,
+            precio_venta_unitario: 0
         }
 
-        // SI NO ES 'ASIGNADA', AGREGAMOS LA CANTIDAD REAL
         if (isEditing && editingTask?.estado !== 'ASIGNADA') {
-            payload.cantidad_real = Number(cantidadReal)
-            // Si hay cantidad real y no hay fecha de termino, poner hoy por defecto, sino mantener la que estaba o poner null
-            if(Number(cantidadReal) > 0 && !editingTask.fecha_termino_real) {
-                payload.fecha_termino_real = new Date()
-            }
+            if(!editingTask.fecha_termino_real) payloadTarea.fecha_termino_real = new Date()
         }
 
-        if(inputType === 'ACT') { payload.actividad_id = selectedItem.value; payload.sub_actividad_id = null }
-        else { payload.sub_actividad_id = selectedItem.value; payload.actividad_id = null }
+        // Payload Items (El detalle)
+        const payloadItems = taskList.map(item => ({
+            actividad_id: item.type === 'ACT' ? item.value : null,
+            sub_actividad_id: item.type === 'SUB' ? item.value : null,
+            cantidad_asignada: item.cantidad_asignada,
+            cantidad_real: item.cantidad_real,
+            precio_costo: item.precio_costo,
+            precio_venta: item.precio_venta
+        }))
 
+        // Llamamos al servicio actualizado (que maneja cabecera + items)
         if(isEditing) {
-            await tareasService.actualizarEstado(editingTask.id, editingTask.estado, payload)
+            await tareasService.actualizarTareaCompleta(editingTask.id, payloadTarea, payloadItems)
         } else {
-            payload.estado = 'ASIGNADA'
-            await tareasService.crearTarea(payload)
+            payloadTarea.estado = 'ASIGNADA'
+            await tareasService.crearTarea(payloadTarea, payloadItems)
         }
 
         setShowModal(false)
@@ -559,21 +612,65 @@ function AsignarTareas() {
     setIsEditing(false); setEditingTask(null); setSelectedCuadrilla(null); setSelectedItem(null);
     setSelectedZona(null); setSelectedTramo(null); 
     setCantidadAsignada(''); setCantidadReal(''); // Reset ambos
-        setPuntaInicio(''); setPuntaFinal('');
-        setGeoData({ coords: '', lat: '', lon: '', foto: null, fotoUrl: null });
-        setShowGeoModal(false);
+    setPuntaInicio(''); setPuntaFinal('');
+    setGeoData({ coords: '', lat: '', lon: '', foto: null, fotoUrl: null });
+    setShowGeoModal(false);
     setDateRange([null, null]);
     setComentarios(''); setArchivo(null); setArchivoUrlExistente(null); setSelectedEP(null);
-        // Reset materiales visuales al crear nueva tarea
-        setConsumosTarea([])
-        setMaterialesDisponibles([])
-        setShowModal(true)
+    // Reset materiales visuales al crear nueva tarea
+    setConsumosTarea([])
+    setMaterialesDisponibles([])
+    // Reset lista de items multi-tarea
+    setTaskList([])
+    setTempItem(null)
+    setShowModal(true)
   }
 
   const openEditModal = async (task) => {
     setIsEditing(true)
     setEditingTask(task)
     setSelectedCuadrilla(cuadrillasOpts.find(c => c.value === task.proveedor_id))
+    
+    // --- CARGAR ÍTEMS MULTI-TAREA ---
+    if(task.items && task.items.length > 0) {
+        const loadedItems = task.items.map(i => ({
+            uniqueId: i.id, 
+            value: i.actividad?.id || i.sub_actividad?.id,
+            label: i.actividad?.nombre || i.sub_actividad?.nombre,
+            type: i.actividad ? 'ACT' : 'SUB',
+            precio_venta: i.precio_venta_unitario || i.precio_venta,
+            precio_costo: i.precio_costo_unitario || i.precio_costo,
+            cantidad_asignada: i.cantidad_asignada,
+            cantidad_real: i.cantidad_real || 0,
+            data: i.actividad || i.sub_actividad // Importante para saber si requiere material
+        }))
+        setTaskList(loadedItems)
+    } else {
+        // Fallback: Si no hay items pero sí hay actividad directa (tareas antiguas)
+        if(task.actividad_id || task.sub_actividad_id) {
+            const act = task.actividad || task.sub_actividad
+            if(act) {
+                setTaskList([{
+                    uniqueId: Date.now(),
+                    value: act.id,
+                    label: act.nombre,
+                    type: task.actividad_id ? 'ACT' : 'SUB',
+                    precio_venta: task.precio_venta_unitario || act.valor_venta || 0,
+                    precio_costo: task.precio_costo_unitario || 0,
+                    cantidad_asignada: task.cantidad_asignada || 0,
+                    cantidad_real: task.cantidad_real || 0,
+                    data: act
+                }])
+            } else {
+                setTaskList([])
+            }
+        } else {
+            setTaskList([]) 
+        }
+    }
+    setTempItem(null)
+    // ------------------------------------------
+    
     if(task.actividad_id) {
         setInputType('ACT')
         const act = actividadesData.find(a => a.id === task.actividad_id)
@@ -591,7 +688,7 @@ function AsignarTareas() {
         setSelectedTramo(tOpts.find(tr => tr.value === task.tramo_id))
     }
     
-    // CARGAR CANTIDADES
+    // CARGAR CANTIDADES (Legacy - mantener por compatibilidad)
     setCantidadAsignada(task.cantidad_asignada)
     setCantidadReal(task.cantidad_real || 0)
 
@@ -841,228 +938,528 @@ function AsignarTareas() {
           proyectoInfo={proyectoInfo}
       />
 
-      {/* MODAL */}
-    <Modal show={showModal} onHide={handleCloseModal} size="lg" centered backdrop="static">
-        <Modal.Header closeButton className="border-0 bg-light">
-            <Modal.Title className="fw-bold text-dark h5">
-                {isEditing ? `Editar Tarea` : 'Crear Orden de Trabajo'} {editingTask?.estado && <Badge bg="secondary" className="ms-2">{editingTask.estado}</Badge>}
+      {/* MODAL - DISEÑO PROFESIONAL */}
+    <Modal show={showModal} onHide={handleCloseModal} size="xl" centered backdrop="static" className="modal-professional">
+        <Modal.Header closeButton className="border-0 pb-0" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
+            <Modal.Title className="text-white">
+                <div className="d-flex align-items-center gap-3">
+                    <div className="bg-white bg-opacity-25 rounded-circle p-2 d-flex align-items-center justify-content-center" style={{width: '42px', height: '42px'}}>
+                        <i className={`bi ${isEditing ? 'bi-pencil-square' : 'bi-plus-circle'} fs-5`}></i>
+                    </div>
+                    <div>
+                        <h5 className="mb-0 fw-bold">{isEditing ? 'Editar Orden de Trabajo' : 'Nueva Orden de Trabajo'}</h5>
+                        <small className="opacity-75">{proyectoInfo?.nombre || proyectoInfo?.proyecto || 'Proyecto'}</small>
+                    </div>
+                </div>
+                {editingTask?.estado && (
+                    <Badge 
+                        bg={editingTask.estado === 'APROBADA' ? 'success' : editingTask.estado === 'REALIZADA' ? 'info' : 'light'} 
+                        text={editingTask.estado === 'ASIGNADA' ? 'dark' : 'white'}
+                        className="ms-3 px-3 py-2"
+                    >
+                        {editingTask.estado}
+                    </Badge>
+                )}
             </Modal.Title>
         </Modal.Header>
-        <Modal.Body className="px-4 pb-4">
+        <Modal.Body className="p-0">
             <Form onSubmit={handleSave}>
                 
-                {/* 1. SECCIÓN PAGO BLINDADA */}
+                {/* SECCIÓN PAGO (Oculta por defecto) */}
                 {showPaymentSection && (
-                    <div className="bg-success bg-opacity-10 border border-success p-3 rounded mb-4">
+                    <div className="bg-success bg-opacity-10 border-bottom border-success p-4">
                         <h6 className="fw-bold text-success mb-3"><i className="bi bi-cash-stack me-2"></i>Asignación a Estado de Pago</h6>
-                        <div className="alert alert-light border small py-2 mb-3 d-flex align-items-center text-muted"><i className="bi bi-info-circle-fill me-2 text-info"></i><div>Mostrando EPs de: <strong>{editingTask?.proveedor?.nombre}</strong></div></div>
                         <Row className="g-2 align-items-end">
-                            <Col md={7}><Form.Label className="small fw-bold text-muted">Seleccionar EP Abierto</Form.Label><div className="d-flex gap-2"><div className="flex-grow-1"><Select options={getCompatibleEPs()} placeholder="Seleccione un borrador..." value={selectedEP} onChange={setSelectedEP} noOptionsMessage={() => "Ningún EP disponible."} isClearable /></div>{selectedEP && (<Button variant="outline-secondary" onClick={handleEditEPCode} title="Editar Código"><i className="bi bi-pencil"></i></Button>)}</div></Col>
-                            <Col md={5}><Button variant="success" className="w-100 text-white shadow-sm" onClick={handleCreateNextEP}><i className="bi bi-magic me-1"></i> Generar Nuevo</Button></Col>
+                            <Col md={7}>
+                                <Form.Label className="small fw-bold text-muted">EP Disponible</Form.Label>
+                                <div className="d-flex gap-2">
+                                    <div className="flex-grow-1">
+                                        <Select options={getCompatibleEPs()} placeholder="Seleccione..." value={selectedEP} onChange={setSelectedEP} isClearable />
+                                    </div>
+                                    {selectedEP && <Button variant="outline-secondary" onClick={handleEditEPCode}><i className="bi bi-pencil"></i></Button>}
+                                </div>
+                            </Col>
+                            <Col md={5}><Button variant="success" className="w-100" onClick={handleCreateNextEP}><i className="bi bi-magic me-1"></i> Nuevo EP</Button></Col>
                         </Row>
                     </div>
                 )}
 
-                {/* 2. SELECTOR TIPO */}
-                {!isEditing && (
-                    <div className="d-flex justify-content-center mb-4 bg-light p-1 rounded-pill border mx-auto" style={{width: 'fit-content'}}>
-                        <Button variant={inputType === 'ACT' ? 'white' : 'transparent'} className={`rounded-pill px-4 border-0 fw-bold ${inputType === 'ACT' ? 'shadow-sm text-primary' : 'text-muted'}`} onClick={() => { setInputType('ACT'); setSelectedItem(null); }}>Actividad</Button>
-                        <Button variant={inputType === 'SUB' ? 'white' : 'transparent'} className={`rounded-pill px-4 border-0 fw-bold ${inputType === 'SUB' ? 'shadow-sm text-primary' : 'text-muted'}`} onClick={() => { setInputType('SUB'); setSelectedItem(null); }}>Sub-Actividad</Button>
-                    </div>
-                )}
-                
-                <Row className="g-3">
-                    <Col md={6}><Form.Label className="small fw-bold text-muted">Contratista</Form.Label><Select options={cuadrillasOpts} placeholder="Buscar..." value={selectedCuadrilla} onChange={setSelectedCuadrilla} isDisabled={!canEditCore} /></Col>
-                    <Col md={6}><Form.Label className="small fw-bold text-muted">Item</Form.Label><Select options={getItemOptions()} placeholder="Buscar..." value={selectedItem} onChange={setSelectedItem} isDisabled={!canEditCore} /></Col>
-                    <Col md={6}><Form.Label className="small fw-bold text-muted">Zona</Form.Label><Select options={zonasOpts} placeholder="Zona..." value={selectedZona} onChange={handleZonaChange} /></Col>
-                    <Col md={6}><Form.Label className="small fw-bold text-muted">Tramo</Form.Label><Select options={tramosOpts} placeholder="Tramo..." value={selectedTramo} onChange={setSelectedTramo} isDisabled={!selectedZona} /></Col>
-                    <Col md={6}><Form.Label className="small fw-bold text-muted">Fechas</Form.Label><DatePicker selectsRange startDate={startDate} endDate={endDate} onChange={(update) => setDateRange(update)} className="form-control" placeholderText="Inicio - Fin" dateFormat="dd/MM/yyyy" /></Col>
-                    
-                    {/* --- AQUÍ ESTÁ EL CAMBIO DE CANTIDADES SPLIT --- */}
-                    {isExecutionPhase ? (
-                        <>
-                            {/* CANTIDADES */}
-                            <Col md={3}>
-                                <Form.Label className="small fw-bold text-muted">Cant. Asignada (Plan)</Form.Label>
-                                <Form.Control type="number" value={cantidadAsignada} disabled className="bg-light" />
-                            </Col>
-                            <Col md={3}>
-                                <Form.Label className="small fw-bold text-success">Cant. Real (Ejecutado)</Form.Label>
-                                <Form.Control 
-                                        type="number" 
-                                        value={cantidadReal} 
-                                        onChange={e => setCantidadReal(e.target.value)} 
-                                        className="border-success fw-bold" 
-                                        disabled={editingTask?.estado === 'APROBADA'}
-                                        autoFocus={editingTask?.estado !== 'APROBADA'}
-                                    />
-                            </Col>
-
-                            {/* NUEVOS INPUTS: PUNTAS */}
-                            <Col md={3}>
-                                <Form.Label className="small fw-bold text-primary">Punta Inicio</Form.Label>
-                                <Form.Control 
-                                    size="sm"
-                                    placeholder="Ej: Poste 10" 
-                                    value={puntaInicio} 
-                                    onChange={e => setPuntaInicio(e.target.value)} 
-                                    disabled={editingTask?.estado === 'APROBADA'}
-                                />
-                            </Col>
-                            <Col md={3}>
-                                <Form.Label className="small fw-bold text-primary">Punta Final</Form.Label>
-                                <Form.Control 
-                                    size="sm"
-                                    placeholder="Ej: Cámara 2" 
-                                    value={puntaFinal} 
-                                    onChange={e => setPuntaFinal(e.target.value)} 
-                                    disabled={editingTask?.estado === 'APROBADA'}
-                                />
-                            </Col>
-
-                            {/* BOTÓN GEOLOCALIZACIÓN */}
-                            <Col md={12} className="mt-2">
-                                <div className="d-flex align-items-center gap-2 bg-light p-2 rounded border">
-                                    <Button 
-                                        variant={geoData.coords || geoData.fotoUrl || geoData.foto ? "success" : "outline-secondary"}
-                                        size="sm" 
-                                        onClick={() => setShowGeoModal(true)}
-                                        disabled={editingTask?.estado === 'APROBADA'}
-                                    >
-                                        <i className="bi bi-geo-alt-fill me-2"></i>
-                                        {geoData.coords || geoData.fotoUrl || geoData.foto ? "Datos Geo Cargados" : "Agregar Geolocalización"}
-                                    </Button>
-                                    
-                                    {(geoData.coords || geoData.lat) && (
-                                        <span className="small text-muted font-monospace text-truncate">
-                                            <i className="bi bi-pin-map me-1"></i>
-                                            {geoData.coords || `${geoData.lat}, ${geoData.lon}`}
-                                        </span>
-                                    )}
-                                </div>
-                            </Col>
-                        </>
-                    ) : (
-                        // ... (Caso normal 'Asignada') ...
-                        <Col md={6}>
-                            <Form.Label className="small fw-bold text-muted">Cantidad Asignada</Form.Label>
-                            <Form.Control type="number" value={cantidadAsignada} onChange={e => setCantidadAsignada(e.target.value)} placeholder="0" />
+                {/* DATOS PRINCIPALES - Layout horizontal limpio */}
+                <div className="p-4 bg-light border-bottom">
+                    <Row className="g-4">
+                        <Col lg={6}>
+                            <Form.Label className="small fw-semibold text-uppercase text-muted mb-2" style={{letterSpacing: '0.5px', fontSize: '11px'}}>
+                                <i className="bi bi-person-badge me-1"></i>Contratista / Cuadrilla
+                            </Form.Label>
+                            <Select 
+                                options={cuadrillasOpts} 
+                                placeholder="Seleccionar contratista..." 
+                                value={selectedCuadrilla} 
+                                onChange={setSelectedCuadrilla} 
+                                isDisabled={!canEditCore}
+                                styles={{
+                                    control: (base, state) => ({ 
+                                        ...base, 
+                                        minHeight: '44px',
+                                        borderColor: state.isFocused ? '#667eea' : '#dee2e6',
+                                        boxShadow: state.isFocused ? '0 0 0 3px rgba(102,126,234,0.15)' : 'none',
+                                        '&:hover': { borderColor: '#667eea' }
+                                    }),
+                                    option: (base, state) => ({
+                                        ...base,
+                                        backgroundColor: state.isSelected ? '#667eea' : state.isFocused ? '#f0f4ff' : 'white'
+                                    })
+                                }}
+                            />
                         </Col>
-                    )}
-                </Row>
-                
-                {/* 4. RESUMEN FINANCIERO */}
-                <div className={`mt-4 p-3 rounded border ${finanzas.valid ? 'bg-light' : 'bg-light'}`}>
-                    {finanzas.valid ? (
-                        <>
-                            <div className="d-flex justify-content-between mb-2 border-bottom pb-2">
-                                <span className="small text-muted">Unitario:</span>
-                                <div className="d-flex gap-3"><span className="small">Costo: <strong>${finanzas.costoUnit.toLocaleString()}</strong></span><span className="small">Venta: <strong>${finanzas.ventaUnit.toLocaleString()}</strong></span></div>
-                            </div>
-                            <div className="d-flex justify-content-around text-center">
-                                <div><small className="d-block text-uppercase" style={{fontSize:'10px'}}>{isExecutionPhase ? 'Pago Real' : 'Pago Estimado'}</small><span className="fw-bold fs-5">${finanzas.totalCosto.toLocaleString()}</span></div>
-                                <div><small className="d-block text-uppercase" style={{fontSize:'10px'}}>{isExecutionPhase ? 'Venta Real' : 'Venta Estimada'}</small><span className="fw-bold text-primary fs-5">${finanzas.totalVenta.toLocaleString()}</span></div>
-                            </div>
-                        </>
-                    ) : (<div className="text-center text-danger small fw-bold">{tarifaCheck.msg}</div>)}
+                        <Col lg={6}>
+                            <Form.Label className="small fw-semibold text-uppercase text-muted mb-2" style={{letterSpacing: '0.5px', fontSize: '11px'}}>
+                                <i className="bi bi-calendar-range me-1"></i>Período de Ejecución
+                            </Form.Label>
+                            <DatePicker 
+                                selectsRange 
+                                startDate={startDate} 
+                                endDate={endDate} 
+                                onChange={(update) => setDateRange(update)} 
+                                className="form-control py-2" 
+                                placeholderText="Fecha inicio → Fecha fin" 
+                                dateFormat="dd MMM yyyy"
+                                locale={es}
+                                wrapperClassName="w-100"
+                            />
+                        </Col>
+                        <Col lg={6}>
+                            <Form.Label className="small fw-semibold text-uppercase text-muted mb-2" style={{letterSpacing: '0.5px', fontSize: '11px'}}>
+                                <i className="bi bi-geo me-1"></i>Zona de Trabajo
+                            </Form.Label>
+                            <Select 
+                                options={zonasOpts} 
+                                placeholder="Seleccionar zona..." 
+                                value={selectedZona} 
+                                onChange={handleZonaChange}
+                                styles={{
+                                    control: (base, state) => ({ 
+                                        ...base, 
+                                        minHeight: '44px',
+                                        borderColor: state.isFocused ? '#667eea' : '#dee2e6',
+                                        boxShadow: state.isFocused ? '0 0 0 3px rgba(102,126,234,0.15)' : 'none'
+                                    })
+                                }}
+                            />
+                        </Col>
+                        <Col lg={6}>
+                            <Form.Label className="small fw-semibold text-uppercase text-muted mb-2" style={{letterSpacing: '0.5px', fontSize: '11px'}}>
+                                <i className="bi bi-signpost-split me-1"></i>Tramo / Sector
+                            </Form.Label>
+                            <Select 
+                                options={tramosOpts} 
+                                placeholder={selectedZona ? "Seleccionar tramo..." : "Primero selecciona zona"} 
+                                value={selectedTramo} 
+                                onChange={setSelectedTramo} 
+                                isDisabled={!selectedZona}
+                                styles={{
+                                    control: (base, state) => ({ 
+                                        ...base, 
+                                        minHeight: '44px',
+                                        borderColor: state.isFocused ? '#667eea' : '#dee2e6',
+                                        boxShadow: state.isFocused ? '0 0 0 3px rgba(102,126,234,0.15)' : 'none',
+                                        backgroundColor: !selectedZona ? '#f8f9fa' : 'white'
+                                    })
+                                }}
+                            />
+                        </Col>
+                    </Row>
                 </div>
 
-                <div className="mt-3"><Form.Label className="small fw-bold text-muted">Plano / Evidencia</Form.Label><Form.Control type="file" size="sm" onChange={e => setArchivo(e.target.files[0])} />{archivoUrlExistente && <div className="small mt-1"><a href={archivoUrlExistente} target="_blank" rel="noreferrer">Ver archivo actual</a></div>}</div>
-
-                {/* SECCIÓN MATERIALES (Visible en Ejecución y Aprobada, pero editable solo en Ejecución) */}
-                {editingTask && editingTask.estado !== 'ASIGNADA' && (
-                    <div className="mt-4 border-top pt-3">
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                            <h6 className="fw-bold text-secondary mb-0">
-                                <i className="bi bi-box-seam me-2"></i>Materiales Instalados
+                {/* SECCIÓN ACTIVIDADES - Rediseñada */}
+                <div className="p-4">
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h6 className="fw-bold text-dark mb-1">
+                                <i className="bi bi-list-check me-2 text-primary"></i>
+                                Partidas / Actividades
                             </h6>
-                            {/* Solo mostramos el aviso si NO se puede editar (ej: en Aprobada) */}
-                            {editingTask?.estado !== 'REALIZADA' && (
-                                <Badge bg="light" text="dark" className="border">
-                                    <i className="bi bi-lock-fill me-1"></i>Solo Lectura
-                                </Badge>
-                            )}
+                            <small className="text-muted">Agrega las actividades que incluye esta orden de trabajo</small>
                         </div>
-                        
-                        {/* 1. EL FORMULARIO PARA AGREGAR (Solo visible si está en REALIZADA) */}
-                        {editingTask?.estado === 'REALIZADA' && (
-                            <div className="d-flex gap-2 mb-3 align-items-end bg-light p-2 rounded">
-                                <div className="flex-grow-1">
-                                    <label className="small text-muted">Material Disponible</label>
+                        <Badge bg="primary" className="px-3 py-2">
+                            {taskList.length} {taskList.length === 1 ? 'item' : 'items'}
+                        </Badge>
+                    </div>
+                    
+                    {/* Barra de búsqueda de actividades - Más espaciosa */}
+                    {canEditCore && (
+                        <div className="bg-gradient rounded-3 p-3 mb-4" style={{background: 'linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%)'}}>
+                            <Row className="g-3 align-items-end">
+                                <Col xs={12} md={3}>
+                                    <Form.Label className="small fw-semibold text-muted mb-1">Tipo</Form.Label>
                                     <Select 
-                                        options={materialesDisponibles} 
-                                        value={selMaterial} 
-                                        onChange={setSelMaterial}
-                                        placeholder="Selecciona de tu bodega..."
-                                        noOptionsMessage={() => "Sin stock asignado"}
-                                        // Bloqueamos el select si no es REALIZADA (seguridad extra)
-                                        isDisabled={editingTask.estado !== 'REALIZADA'}
+                                        options={[{value:'ACT', label:'Actividad'}, {value:'SUB', label:'Sub-Actividad'}]} 
+                                        value={{value: inputType, label: inputType==='ACT'?'Actividad':'Sub-Actividad'}} 
+                                        onChange={e => {setInputType(e.value); setTempItem(null)}} 
+                                        isDisabled={!selectedCuadrilla}
+                                        styles={{ 
+                                            control: (base) => ({ ...base, minHeight: '42px', backgroundColor: 'white' }),
+                                            singleValue: (base) => ({ ...base, fontWeight: 500 })
+                                        }}
                                     />
-                                </div>
-                                <div style={{width: '100px'}}>
-                                    <label className="small text-muted">Cantidad</label>
-                                    <Form.Control 
-                                        type="number" 
-                                        value={cantMaterial} 
-                                        onChange={e => setCantMaterial(e.target.value)} 
+                                </Col>
+                                <Col xs={12} md={7}>
+                                    <Form.Label className="small fw-semibold text-muted mb-1">Buscar Actividad</Form.Label>
+                                    <Select 
+                                        options={getItemOptions()} 
+                                        placeholder={selectedCuadrilla ? "🔍 Escribe para buscar actividad..." : "⚠️ Primero selecciona un contratista"}
+                                        value={tempItem} 
+                                        onChange={setTempItem} 
+                                        isDisabled={!selectedCuadrilla}
+                                        noOptionsMessage={() => "No se encontraron actividades"}
+                                        styles={{ 
+                                            control: (base, state) => ({ 
+                                                ...base, 
+                                                minHeight: '42px',
+                                                backgroundColor: 'white',
+                                                borderColor: state.isFocused ? '#667eea' : '#dee2e6',
+                                                boxShadow: state.isFocused ? '0 0 0 3px rgba(102,126,234,0.15)' : 'none'
+                                            }),
+                                            menu: (base) => ({ ...base, zIndex: 9999 }),
+                                            option: (base, state) => ({
+                                                ...base,
+                                                padding: '12px 16px',
+                                                backgroundColor: state.isSelected ? '#667eea' : state.isFocused ? '#f0f4ff' : 'white',
+                                                cursor: 'pointer'
+                                            })
+                                        }}
                                     />
-                                </div>
-                                <Button 
-                                    variant="outline-primary" 
-                                    onClick={handleAddMaterial} 
-                                    disabled={!selMaterial || editingTask.estado !== 'REALIZADA'}
-                                >
-                                    <i className="bi bi-plus-lg"></i>
-                                </Button>
-                            </div>
-                        )}
+                                </Col>
+                                <Col xs={12} md={2}>
+                                    <Button 
+                                        variant="primary" 
+                                        className="w-100 d-flex align-items-center justify-content-center gap-2 shadow-sm" 
+                                        style={{height: '42px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none'}}
+                                        onClick={handleAddItem} 
+                                        disabled={!tempItem}
+                                    >
+                                        <i className="bi bi-plus-lg"></i>
+                                        <span className="d-none d-lg-inline">Agregar</span>
+                                    </Button>
+                                </Col>
+                            </Row>
+                        </div>
+                    )}
 
-                        {/* 2. LA LISTA DE CONSUMOS (Siempre visible, pero el botón borrar condicionado) */}
-                        <div className="table-responsive border rounded" style={{maxHeight: '150px'}}>
-                            <table className="table table-sm table-striped mb-0 small">
-                                <thead>
+                    {/* Lista de actividades agregadas */}
+                    <div className="border rounded-3 overflow-hidden" style={{maxHeight: '280px', overflowY: 'auto'}}>
+                        {taskList.length === 0 ? (
+                            <div className="text-center py-5">
+                                <i className="bi bi-inbox text-muted" style={{fontSize: '3rem', opacity: 0.3}}></i>
+                                <p className="text-muted mt-3 mb-0">No hay actividades agregadas</p>
+                                <small className="text-muted">Usa el buscador de arriba para agregar</small>
+                            </div>
+                        ) : (
+                            <table className="table table-hover mb-0 align-middle">
+                                <thead className="bg-white sticky-top" style={{boxShadow: '0 1px 3px rgba(0,0,0,0.08)'}}>
                                     <tr>
-                                        <th>Material</th>
-                                        <th className="text-end">Cant.</th>
-                                        {/* La columna borrar solo aparece si estamos en REALIZADA */}
-                                        {editingTask?.estado === 'REALIZADA' && <th></th>}
+                                        <th className="ps-3 py-3 border-0 text-muted fw-semibold" style={{fontSize: '12px'}}>ACTIVIDAD</th>
+                                        <th className="text-center py-3 border-0 text-muted fw-semibold" style={{width:'100px', fontSize: '12px'}}>PLAN</th>
+                                        {isExecutionPhase && <th className="text-center py-3 border-0 text-success fw-semibold" style={{width:'100px', fontSize: '12px'}}>REAL</th>}
+                                        <th className="text-end py-3 border-0 text-muted fw-semibold" style={{width:'110px', fontSize: '12px'}}>COSTO</th>
+                                        <th className="py-3 border-0" style={{width:'50px'}}></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {consumosTarea.map(c => (
-                                        <tr key={c.id}>
-                                            <td>{c.nombre_producto}</td>
-                                            <td className="text-end font-monospace">{c.cantidad} {c.unidad}</td>
-                                            
-                                            {/* BOTÓN BORRAR: Solo si es REALIZADA */}
-                                            {editingTask?.estado === 'REALIZADA' && (
-                                                <td className="text-end" style={{width:'30px'}}>
-                                                    <i 
-                                                        className="bi bi-trash text-danger cursor-pointer" 
-                                                        onClick={() => handleDeleteMaterial(c.id)}
-                                                        title="Eliminar consumo"
-                                                    ></i>
+                                    {taskList.map((item, idx) => (
+                                        <tr key={item.uniqueId || idx} className="border-bottom" style={{transition: 'background 0.2s'}}>
+                                            <td className="ps-3 py-3">
+                                                <div className="d-flex align-items-start gap-2">
+                                                    <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{width: '32px', height: '32px'}}>
+                                                        <i className={`bi ${item.type === 'ACT' ? 'bi-layers' : 'bi-diagram-3'} text-primary`} style={{fontSize: '14px'}}></i>
+                                                    </div>
+                                                    <div className="flex-grow-1 min-width-0">
+                                                        <div className="fw-medium text-dark" style={{lineHeight: '1.3'}}>{item.label}</div>
+                                                        <div className="d-flex gap-2 mt-1">
+                                                            <Badge bg="light" text="muted" className="fw-normal" style={{fontSize: '10px'}}>
+                                                                {item.type === 'ACT' ? 'Actividad' : 'Sub-actividad'}
+                                                            </Badge>
+                                                            {item.data?.requiere_material && (
+                                                                <Badge bg="warning" text="dark" style={{fontSize: '10px'}}>
+                                                                    <i className="bi bi-box-seam me-1"></i>Req. Material
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="text-center py-3">
+                                                <Form.Control 
+                                                    type="number" 
+                                                    size="sm" 
+                                                    value={item.cantidad_asignada} 
+                                                    onChange={e => handleItemChange(item.uniqueId, 'cantidad_asignada', e.target.value)} 
+                                                    disabled={!canEditCore} 
+                                                    className="text-center border-0 bg-light rounded fw-medium" 
+                                                    style={{width:'70px', margin:'0 auto'}} 
+                                                />
+                                            </td>
+                                            {isExecutionPhase && (
+                                                <td className="text-center py-3">
+                                                    <Form.Control 
+                                                        type="number" 
+                                                        size="sm" 
+                                                        value={item.cantidad_real} 
+                                                        onChange={e => handleItemChange(item.uniqueId, 'cantidad_real', e.target.value)} 
+                                                        className="text-center border-success bg-success bg-opacity-10 rounded fw-bold text-success" 
+                                                        style={{width:'70px', margin:'0 auto'}} 
+                                                        disabled={editingTask?.estado === 'APROBADA'} 
+                                                    />
                                                 </td>
                                             )}
-                                        </tr>
-                                    ))}
-                                    {consumosTarea.length === 0 && (
-                                        <tr>
-                                            <td colSpan={editingTask?.estado === 'REALIZADA' ? "3" : "2"} className="text-center text-muted fst-italic">
-                                                Sin materiales declarados
+                                            <td className="text-end py-3 pe-2">
+                                                <span className="fw-semibold text-dark">
+                                                    ${( (isExecutionPhase ? item.cantidad_real : item.cantidad_asignada) * item.precio_costo ).toLocaleString()}
+                                                </span>
+                                            </td>
+                                            <td className="text-center py-3">
+                                                {canEditCore && (
+                                                    <Button 
+                                                        variant="link" 
+                                                        className="p-1 text-danger" 
+                                                        onClick={() => handleRemoveItem(item.uniqueId)}
+                                                        title="Eliminar"
+                                                    >
+                                                        <i className="bi bi-x-circle"></i>
+                                                    </Button>
+                                                )}
                                             </td>
                                         </tr>
-                                    )}
+                                    ))}
                                 </tbody>
                             </table>
+                        )}
+                    </div>
+                </div>
+
+                {/* SECCIÓN EJECUCIÓN (Solo visible en fase de ejecución) */}
+                {isExecutionPhase && (
+                    <div className="px-4 pb-4">
+                        <div className="bg-info bg-opacity-10 rounded-3 p-3 border border-info border-opacity-25">
+                            <h6 className="fw-bold text-info mb-3">
+                                <i className="bi bi-tools me-2"></i>Datos de Ejecución
+                            </h6>
+                            <Row className="g-3">
+                                <Col md={3}>
+                                    <Form.Label className="small fw-semibold text-muted mb-1">Punta Inicio</Form.Label>
+                                    <Form.Control 
+                                        placeholder="Ej: Poste 10" 
+                                        value={puntaInicio} 
+                                        onChange={e => setPuntaInicio(e.target.value)} 
+                                        disabled={editingTask?.estado === 'APROBADA'}
+                                        className="bg-white"
+                                    />
+                                </Col>
+                                <Col md={3}>
+                                    <Form.Label className="small fw-semibold text-muted mb-1">Punta Final</Form.Label>
+                                    <Form.Control 
+                                        placeholder="Ej: Cámara 2" 
+                                        value={puntaFinal} 
+                                        onChange={e => setPuntaFinal(e.target.value)} 
+                                        disabled={editingTask?.estado === 'APROBADA'}
+                                        className="bg-white"
+                                    />
+                                </Col>
+                                <Col md={6}>
+                                    <Form.Label className="small fw-semibold text-muted mb-1">Geolocalización</Form.Label>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <Button 
+                                            variant={geoData.coords || geoData.fotoUrl || geoData.foto ? "success" : "outline-secondary"}
+                                            className="d-flex align-items-center gap-2"
+                                            onClick={() => setShowGeoModal(true)}
+                                            disabled={editingTask?.estado === 'APROBADA'}
+                                        >
+                                            <i className="bi bi-geo-alt-fill"></i>
+                                            {geoData.coords || geoData.fotoUrl || geoData.foto ? "Geo Cargado ✓" : "Agregar Ubicación"}
+                                        </Button>
+                                        {(geoData.coords || geoData.lat) && (
+                                            <code className="small text-muted bg-white px-2 py-1 rounded">
+                                                {geoData.coords || `${geoData.lat}, ${geoData.lon}`}
+                                            </code>
+                                        )}
+                                    </div>
+                                </Col>
+                            </Row>
+                        </div>
+                    </div>
+                )}
+                
+                {/* RESUMEN FINANCIERO - Rediseñado */}
+                <div className="px-4 pb-4">
+                    <div className={`rounded-3 overflow-hidden ${finanzas.valid ? '' : 'border border-danger'}`} 
+                         style={{background: finanzas.valid ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#fff5f5'}}>
+                        {finanzas.valid ? (
+                            <div className="p-4">
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <div className="text-white text-center flex-fill border-end border-white border-opacity-25">
+                                        <small className="d-block text-uppercase text-white-50 mb-1" style={{fontSize:'10px', letterSpacing:'1px'}}>
+                                            {isExecutionPhase ? 'COSTO REAL' : 'COSTO ESTIMADO'}
+                                        </small>
+                                        <span className="fw-bold fs-4">${finanzas.totalCosto.toLocaleString()}</span>
+                                    </div>
+                                    <div className="text-white text-center flex-fill">
+                                        <small className="d-block text-uppercase text-white-50 mb-1" style={{fontSize:'10px', letterSpacing:'1px'}}>
+                                            {isExecutionPhase ? 'VENTA REAL' : 'VENTA ESTIMADA'}
+                                        </small>
+                                        <span className="fw-bold fs-4">${finanzas.totalVenta.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-4 text-center">
+                                <i className="bi bi-exclamation-triangle text-danger fs-4"></i>
+                                <p className="text-danger mb-0 mt-2 fw-medium">{tarifaCheck.msg}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* ARCHIVOS Y EVIDENCIAS */}
+                <div className="px-4 pb-4">
+                    <Row className="g-3">
+                        <Col md={6}>
+                            <Form.Label className="small fw-semibold text-uppercase text-muted" style={{fontSize: '11px', letterSpacing: '0.5px'}}>
+                                <i className="bi bi-file-earmark-arrow-up me-1"></i>Plano / Evidencia
+                            </Form.Label>
+                            <Form.Control 
+                                type="file" 
+                                onChange={e => setArchivo(e.target.files[0])}
+                                className="bg-light"
+                            />
+                            {archivoUrlExistente && (
+                                <a href={archivoUrlExistente} target="_blank" rel="noreferrer" className="small text-primary d-inline-flex align-items-center gap-1 mt-2">
+                                    <i className="bi bi-eye"></i>Ver archivo actual
+                                </a>
+                            )}
+                        </Col>
+                    </Row>
+                </div>
+
+                {/* SECCIÓN MATERIALES (Solo en ejecución) */}
+                {editingTask && editingTask.estado !== 'ASIGNADA' && (
+                    <div className="px-4 pb-4">
+                        <div className="border rounded-3 overflow-hidden">
+                            <div className="bg-light px-3 py-2 d-flex justify-content-between align-items-center border-bottom">
+                                <h6 className="fw-bold text-secondary mb-0 small">
+                                    <i className="bi bi-box-seam me-2"></i>Materiales Instalados
+                                </h6>
+                                {editingTask?.estado !== 'REALIZADA' && (
+                                    <Badge bg="secondary" className="fw-normal">
+                                        <i className="bi bi-lock-fill me-1"></i>Bloqueado
+                                    </Badge>
+                                )}
+                            </div>
+                        
+                            {/* Formulario para agregar materiales */}
+                            {editingTask?.estado === 'REALIZADA' && (
+                                <div className="p-3 border-bottom bg-white">
+                                    <Row className="g-2 align-items-end">
+                                        <Col md={7}>
+                                            <Form.Label className="small text-muted mb-1">Material Disponible</Form.Label>
+                                            <Select 
+                                                options={materialesDisponibles} 
+                                                value={selMaterial} 
+                                                onChange={setSelMaterial}
+                                                placeholder="Selecciona de tu bodega..."
+                                                noOptionsMessage={() => "Sin stock asignado"}
+                                                isDisabled={editingTask.estado !== 'REALIZADA'}
+                                                styles={{
+                                                    control: (base) => ({ ...base, minHeight: '38px' })
+                                                }}
+                                            />
+                                        </Col>
+                                        <Col md={3}>
+                                            <Form.Label className="small text-muted mb-1">Cantidad</Form.Label>
+                                            <Form.Control 
+                                                type="number" 
+                                                value={cantMaterial} 
+                                                onChange={e => setCantMaterial(e.target.value)}
+                                                placeholder="0"
+                                            />
+                                        </Col>
+                                        <Col md={2}>
+                                            <Button 
+                                                variant="primary" 
+                                                className="w-100"
+                                                onClick={handleAddMaterial} 
+                                                disabled={!selMaterial || editingTask.estado !== 'REALIZADA'}
+                                            >
+                                                <i className="bi bi-plus-lg"></i>
+                                            </Button>
+                                        </Col>
+                                    </Row>
+                                </div>
+                            )}
+
+                            {/* Lista de consumos */}
+                            <div style={{maxHeight: '120px', overflowY: 'auto'}}>
+                                <table className="table table-sm mb-0 small align-middle">
+                                    <tbody>
+                                        {consumosTarea.map(c => (
+                                            <tr key={c.id}>
+                                                <td className="ps-3">{c.nombre_producto}</td>
+                                                <td className="text-end font-monospace text-muted">{c.cantidad} {c.unidad}</td>
+                                                {editingTask?.estado === 'REALIZADA' && (
+                                                    <td className="text-end pe-3" style={{width:'40px'}}>
+                                                        <Button variant="link" className="p-0 text-danger" onClick={() => handleDeleteMaterial(c.id)}>
+                                                            <i className="bi bi-x-circle"></i>
+                                                        </Button>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        ))}
+                                        {consumosTarea.length === 0 && (
+                                            <tr>
+                                                <td colSpan="3" className="text-center text-muted py-3 fst-italic">
+                                                    Sin materiales declarados
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                    <div className="d-grid gap-2 mt-4 d-md-flex justify-content-md-end">
-                    {isEditing && editingTask?.estado === 'ASIGNADA' && (<Button variant="outline-danger" onClick={handleDelete} className="me-md-auto"><i className="bi bi-trash me-2"></i>Eliminar</Button>)}
-                    <Button variant="secondary" onClick={handleCloseModal}>Cancelar</Button>
-                    <Button variant="primary" type="submit" disabled={!finanzas.valid || uploading}>{uploading ? 'Guardando...' : 'Guardar Cambios'}</Button>
+                {/* FOOTER CON BOTONES */}
+                <div className="px-4 py-3 bg-light border-top d-flex justify-content-between align-items-center">
+                    {isEditing && editingTask?.estado === 'ASIGNADA' ? (
+                        <Button variant="outline-danger" onClick={handleDelete} className="d-flex align-items-center gap-2">
+                            <i className="bi bi-trash"></i>
+                            <span>Eliminar</span>
+                        </Button>
+                    ) : <div></div>}
+                    
+                    <div className="d-flex gap-2">
+                        <Button variant="light" onClick={handleCloseModal} className="px-4">
+                            Cancelar
+                        </Button>
+                        <Button 
+                            variant="primary" 
+                            type="submit" 
+                            disabled={!finanzas.valid || uploading}
+                            className="px-4 d-flex align-items-center gap-2"
+                            style={{background: finanzas.valid ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '', border: 'none'}}
+                        >
+                            {uploading ? (
+                                <>
+                                    <Spinner animation="border" size="sm" />
+                                    <span>Guardando...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <i className="bi bi-check2-circle"></i>
+                                    <span>{isEditing ? 'Actualizar' : 'Crear Orden'}</span>
+                                </>
+                            )}
+                        </Button>
+                    </div>
                 </div>
             </Form>
         </Modal.Body>
