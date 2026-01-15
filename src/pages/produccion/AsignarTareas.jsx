@@ -506,22 +506,30 @@ function AsignarTareas() {
             // 1. Creamos la copia con la nueva posición y estado
             const updatedTask = { ...t, estado: newStatus, position: newPosition }
             
-            // 2. CORRECCIÓN: Si vuelve a 'ASIGNADA', limpiamos TODO
+            // 2. CORRECCIÓN: Si vuelve a 'ASIGNADA', limpiamos TODO lo realizado
             if(newStatus === 'ASIGNADA' && oldStatus !== 'ASIGNADA') {
-                // Limpiamos los valores numéricos/IDs
+                // Limpiamos los valores numéricos/IDs de ejecución
                 updatedTask.cantidad_real = null
                 updatedTask.fecha_termino_real = null
                 updatedTask.estado_pago_id = null
 
                 // 🔥 Borramos el OBJETO visual para que desaparezca la etiqueta "EP:..." de la tarjeta
                 updatedTask.estado_pago = null
-                // --- BORRADO VISUAL DE NUEVOS CAMPOS ---
+                // --- BORRADO VISUAL DE CAMPOS DE EJECUCIÓN ---
                 updatedTask.punta_inicio = null;
                 updatedTask.punta_final = null;
                 updatedTask.geo_coords = null;
                 updatedTask.geo_lat = null;
                 updatedTask.geo_lon = null;
                 updatedTask.geo_foto_url = null;
+                
+                // 🔥 Limpiar cantidad_real en los items visualmente
+                if (updatedTask.items && updatedTask.items.length > 0) {
+                    updatedTask.items = updatedTask.items.map(item => ({
+                        ...item,
+                        cantidad_real: 0
+                    }));
+                }
             }
             
             // 3. (Opcional) Si pasa a REALIZADA, inicializamos en 0 visualmente
@@ -559,7 +567,12 @@ function AsignarTareas() {
             extraData.geo_lon = null;
             extraData.geo_foto_url = null;
 
-            // ❌ La limpieza de consumos/materiales la realiza ahora el trigger en la DB
+            // 🔥 RESETEAR EJECUCIÓN: Limpiar cantidad_real en items y eliminar consumos de materiales
+            try {
+                await tareasService.resetearEjecucion(movedId);
+            } catch (errReset) {
+                console.error('Error reseteando ejecución:', errReset);
+            }
         }
 
         // 🔥 NUEVA LÓGICA: ASIGNACIÓN AUTOMÁTICA AL ENTRAR A APROBADA
@@ -1347,10 +1360,10 @@ function AsignarTareas() {
                                         onChange={handleFileChange} // <--- USAR EL NUEVO HANDLER
                                     />
                                     {/* Botón descarga PDF (Solo si ya existe la tarea) */}
-                                    {isEditing && (
+                                    {isEditing && editingTask?.id && (
                                         <PDFDownloadLink
                                             document={<DocumentoOT tarea={editingTask} items={taskList} proyecto={proyectoInfo} />}
-                                            fileName={`OT_${editingTask.id}_${editingTask.proveedor?.nombre?.slice(0,10)}.pdf`}
+                                            fileName={`OT_${editingTask?.id || 'nuevo'}_${editingTask?.proveedor?.nombre?.slice(0,10) || 'prov'}.pdf`}
                                             className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
                                         >
                                             {({ loading }) => loading ? '...' : <><i className="bi bi-file-pdf"></i> OT</>}

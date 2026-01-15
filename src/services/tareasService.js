@@ -127,6 +127,76 @@ export const tareasService = {
     return data
   },
 
+  // Resetear datos de ejecución cuando vuelve a ASIGNADA
+  async resetearEjecucion(tareaId) {
+    try {
+      // 1. Resetear cantidad_real en los items a 0
+      await supabase
+        .from('prod_tarea_items')
+        .update({ cantidad_real: 0 })
+        .eq('tarea_id', tareaId)
+      
+      // 2. Eliminar consumos de materiales asociados a esta tarea
+      await supabase
+        .from('prod_consumos')
+        .delete()
+        .eq('tarea_id', tareaId)
+      
+      console.log(`✅ Ejecución reseteada para tarea ${tareaId}`)
+      return true
+    } catch (error) {
+      console.error('Error reseteando ejecución:', error)
+      throw error
+    }
+  },
+
+  // Obtener tareas asociadas a un Estado de Pago específico
+  async getTareasPorEP(estadoPagoId) {
+    const { data, error } = await supabase
+      .from('prod_tareas')
+      .select(`
+        *,
+        proveedor:proveedores(id, nombre),
+        zona:prod_zonas(id, nombre),
+        tramo:prod_tramos(id, nombre),
+        actividad:prod_actividades(id, nombre, unidad, valor_venta),
+        sub_actividad:prod_sub_actividades(id, nombre, unidad, valor_venta)
+      `)
+      .eq('estado_pago_id', estadoPagoId)
+      .order('id', { ascending: true })
+    
+    if (error) {
+      console.error('Error en getTareasPorEP:', error)
+      throw error
+    }
+
+    // Cargar items para cada tarea
+    if (data && data.length > 0) {
+      const tareaIds = data.map(t => t.id)
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('prod_tarea_items')
+        .select(`
+          *,
+          actividad:prod_actividades(id, nombre, unidad, valor_venta),
+          sub_actividad:prod_sub_actividades(id, nombre, unidad, valor_venta)
+        `)
+        .in('tarea_id', tareaIds)
+      
+      if (!itemsError && itemsData) {
+        const itemsByTarea = {}
+        itemsData.forEach(item => {
+          if (!itemsByTarea[item.tarea_id]) itemsByTarea[item.tarea_id] = []
+          itemsByTarea[item.tarea_id].push(item)
+        })
+        data.forEach(tarea => {
+          tarea.items = itemsByTarea[tarea.id] || []
+        })
+      }
+    }
+    
+    return data || []
+  },
+
   async eliminarTarea(id) {
     const { error } = await supabase.from('prod_tareas').delete().eq('id', id)
     if (error) throw error

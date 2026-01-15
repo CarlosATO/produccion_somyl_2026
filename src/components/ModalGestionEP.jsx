@@ -73,10 +73,21 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
         // 1. Sumar tareas seleccionadas
         const tareasElegidas = tareas.filter(t => selectedTasks.includes(t.id));
         const totalNeto = tareasElegidas.reduce((acc, t) => {
-            // Usamos precio pactado * cantidad real (o asignada si no hay real)
-            const cantidad = t.cantidad_real || 0; 
-            const precio = t.precio_costo_unitario || 0; // Costo para nosotros = Pago para ellos
-            return acc + (cantidad * precio);
+            // Calcular cantidad y precio desde items si existen, sino desde cabecera
+            if (t.items && t.items.length > 0) {
+                // Sumar todos los items de la tarea
+                const subtotal = t.items.reduce((sum, item) => {
+                    const cant = item.cantidad_real || item.cantidad_asignada || 0;
+                    const precio = item.precio_costo_unitario || 0;
+                    return sum + (cant * precio);
+                }, 0);
+                return acc + subtotal;
+            } else {
+                // Fallback: usar datos de cabecera
+                const cantidad = t.cantidad_real || t.cantidad_asignada || 0; 
+                const precio = t.precio_costo_unitario || 0;
+                return acc + (cantidad * precio);
+            }
         }, 0);
 
         // 2. Sumar descuentos seleccionados
@@ -148,18 +159,39 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                                 </thead>
                                 <tbody>
                                     {tareas.map(t => {
-                                        const totalRow = (t.cantidad_real || 0) * (t.precio_costo_unitario || 0);
+                                        // Calcular cantidad y total desde items si existen
+                                        let cantidadReal = 0;
+                                        let totalRow = 0;
+                                        let nombreActividad = t.actividad?.nombre || t.sub_actividad?.nombre || 'Actividad';
+                                        
+                                        if (t.items && t.items.length > 0) {
+                                            // Sumar desde items
+                                            cantidadReal = t.items.reduce((sum, item) => sum + (item.cantidad_real || item.cantidad_asignada || 0), 0);
+                                            totalRow = t.items.reduce((sum, item) => {
+                                                const cant = item.cantidad_real || item.cantidad_asignada || 0;
+                                                const precio = item.precio_costo_unitario || 0;
+                                                return sum + (cant * precio);
+                                            }, 0);
+                                            // Usar nombre del primer item si existe
+                                            if (t.items[0]?.actividad?.nombre) nombreActividad = t.items[0].actividad.nombre;
+                                            else if (t.items[0]?.sub_actividad?.nombre) nombreActividad = t.items[0].sub_actividad.nombre;
+                                        } else {
+                                            // Fallback cabecera
+                                            cantidadReal = t.cantidad_real || t.cantidad_asignada || 0;
+                                            totalRow = cantidadReal * (t.precio_costo_unitario || 0);
+                                        }
+                                        
                                         const isChecked = selectedTasks.includes(t.id);
                                         return (
                                             <tr key={t.id} className={isChecked ? 'table-active' : ''}>
                                                 <td><input type="checkbox" checked={isChecked} onChange={() => toggleTask(t.id)} /></td>
                                                 <td>
-                                                    <div className="fw-bold">{t.actividad?.nombre || t.sub_actividad?.nombre}</div>
+                                                    <div className="fw-bold">{nombreActividad}</div>
                                                     <div className="text-muted" style={{fontSize:'0.75em'}}>{format(new Date(t.fecha_asignacion), 'dd/MM')}</div>
                                                 </td>
                                                 <td><Badge bg="light" text="dark" className="border">{t.zona?.nombre}</Badge></td>
-                                                <td className="text-end">{t.cantidad_real}</td>
-                                                <td className="text-end text-muted">${Number(t.precio_costo_unitario).toLocaleString()}</td>
+                                                <td className="text-end">{cantidadReal}</td>
+                                                <td className="text-end text-muted">${Number(t.items?.[0]?.precio_costo_unitario || t.precio_costo_unitario || 0).toLocaleString()}</td>
                                                 <td className="text-end fw-bold">${totalRow.toLocaleString()}</td>
                                             </tr>
                                         )
