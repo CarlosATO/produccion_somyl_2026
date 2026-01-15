@@ -1470,13 +1470,13 @@ function AsignarTareas() {
                                     const tareaParaMensaje = {
                                         ...(editingTask || {}),
                                         fecha_asignacion: startDate,
-                                        zona: { nombre: selectedZona?.label },
-                                        tramo: { nombre: selectedTramo?.label },
+                                        zona: selectedZona?.label || 'Sin zona',  // Pasar string directamente
+                                        tramo: selectedTramo?.label || null,       // Pasar string directamente
                                         punta_inicio: puntaInicio,
                                         punta_final: puntaFinal,
                                         geo_lat: geoData.lat,
                                         geo_lon: geoData.lon,
-                                        archivo_plano_url: archivoUrlExistente
+                                        archivo_plano_url: archivoUrlExistente     // URL del archivo adjunto
                                     };
 
                                     whatsappService.enviarOT(telefono, tareaParaMensaje, taskList, proyectoInfo);
