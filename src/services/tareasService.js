@@ -9,7 +9,7 @@ export const tareasService = {
       .from('prod_tareas')
       .select(`
         *, 
-        proveedor:proveedores(id, nombre), 
+        proveedor:proveedores(*), 
         zona:prod_zonas(id, nombre), 
         tramo:prod_tramos(id, nombre),
         estado_pago:prod_estados_pago(id, codigo, estado),
@@ -22,6 +22,32 @@ export const tareasService = {
     if (error) {
       console.error('Error en getTareas:', error)
       throw error
+    }
+    
+    // Cargar items para cada tarea
+    if (data && data.length > 0) {
+      const tareaIds = data.map(t => t.id)
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('prod_tarea_items')
+        .select(`
+          *,
+          actividad:prod_actividades(id, nombre, unidad, clasificacion, requiere_material, valor_venta),
+          sub_actividad:prod_sub_actividades(id, nombre, unidad, clasificacion, requiere_material, valor_venta)
+        `)
+        .in('tarea_id', tareaIds)
+      
+      if (!itemsError && itemsData) {
+        // Agrupar items por tarea_id
+        const itemsByTarea = {}
+        itemsData.forEach(item => {
+          if (!itemsByTarea[item.tarea_id]) itemsByTarea[item.tarea_id] = []
+          itemsByTarea[item.tarea_id].push(item)
+        })
+        // Asignar items a cada tarea
+        data.forEach(tarea => {
+          tarea.items = itemsByTarea[tarea.id] || []
+        })
+      }
     }
     
     return data || []

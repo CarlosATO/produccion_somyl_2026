@@ -44,7 +44,7 @@ export const cuadrillasService = {
           alias,
           activo,
           fecha_ingreso,
-          proveedor:proveedores (id, nombre, rut),
+          proveedor:proveedores (*),
           trabajadores:prod_trabajadores (count)
         `)
         .eq('proyecto_id', proyectoId)

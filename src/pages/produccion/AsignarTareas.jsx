@@ -21,6 +21,7 @@ import { estadosPagoService } from '../../services/estadosPagoService'
 import { proyectosService } from '../../services/proyectosService'
 import { stockService } from '../../services/stockService'
 import { generarExcelPlanificacion } from '../../services/excelExportService'
+import { whatsappService } from '../../services/whatsappService' // <--- NUEVO
 import EstadoPagoCard from '../../components/EstadoPagoCard'
 import ModalGestionEP from '../../components/ModalGestionEP'
 
@@ -1429,12 +1430,44 @@ function AsignarTareas() {
 
                 {/* FOOTER CON BOTONES */}
                 <div className="px-4 py-3 bg-light border-top d-flex justify-content-between align-items-center">
-                    {isEditing && editingTask?.estado === 'ASIGNADA' ? (
-                        <Button variant="outline-danger" onClick={handleDelete} className="d-flex align-items-center gap-2">
-                            <i className="bi bi-trash"></i>
-                            <span>Eliminar</span>
-                        </Button>
-                    ) : <div></div>}
+                    <div className="d-flex gap-2">
+                        {/* --- BOTÓN WHATSAPP (SIEMPRE VISIBLE SI HAY DATOS) --- */}
+                        {(selectedCuadrilla || isEditing) && taskList.length > 0 && (
+                            <Button 
+                                variant="success" 
+                                className="d-flex align-items-center gap-2 shadow-sm"
+                                onClick={() => {
+                                    const provData = proveedoresFull.find(p => p.id === (selectedCuadrilla?.value || editingTask?.proveedor_id));
+                                    const telefono = provData?.telefono || provData?.fono || provData?.phone || provData?.celular;
+
+                                    const tareaParaMensaje = {
+                                        ...(editingTask || {}),
+                                        fecha_asignacion: startDate,
+                                        zona: { nombre: selectedZona?.label },
+                                        tramo: { nombre: selectedTramo?.label },
+                                        punta_inicio: puntaInicio,
+                                        punta_final: puntaFinal,
+                                        geo_lat: geoData.lat,
+                                        geo_lon: geoData.lon,
+                                        archivo_plano_url: archivoUrlExistente
+                                    };
+
+                                    whatsappService.enviarOT(telefono, tareaParaMensaje, taskList, proyectoInfo);
+                                }}
+                                title="Enviar Orden de Trabajo por WhatsApp"
+                            >
+                                <i className="bi bi-whatsapp"></i> <span className="d-none d-md-inline">Enviar OT</span>
+                            </Button>
+                        )}
+                        {/* ---------------------------------------------------- */}
+                        
+                        {isEditing && editingTask?.estado === 'ASIGNADA' && (
+                            <Button variant="outline-danger" onClick={handleDelete} className="d-flex align-items-center gap-2">
+                                <i className="bi bi-trash"></i>
+                                <span>Eliminar</span>
+                            </Button>
+                        )}
+                    </div>
                     
                     <div className="d-flex gap-2">
                         <Button variant="light" onClick={handleCloseModal} className="px-4">
@@ -1569,7 +1602,7 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                                             
                                             {/* PIE DE TARJETA: Aquí agregamos el botón de Emitir */}
                                             <div className="border-top pt-2 mt-2 d-flex justify-content-between align-items-end">
-                                                <div className="lh-1"><span className="d-block small">Plan: <strong>{task.cantidad_asignada}</strong></span><span className={`d-block small ${task.cantidad_real ? 'text-success fw-bold' : 'text-muted'}`}>Real: {task.cantidad_real || '-'}</span></div>
+                                                <div className="lh-1"><span className="d-block small">Plan: <strong>{task.items?.reduce((sum, i) => sum + (i.cantidad_asignada || 0), 0) || task.cantidad_asignada || 0}</strong></span><span className={`d-block small ${task.cantidad_real || task.items?.some(i => i.cantidad_real) ? 'text-success fw-bold' : 'text-muted'}`}>Real: {task.items?.reduce((sum, i) => sum + (i.cantidad_real || 0), 0) || task.cantidad_real || '-'}</span></div>
                                                 
                                                 {/* BOTÓN CHECK RÁPIDO (EXISTENTE) */}
                                                 {(id === 'ASIGNADA' || id === 'REALIZADA') && (<Button variant="outline-success" size="sm" className="rounded-circle p-0" style={{width: '28px', height: '28px'}} onClick={(e) => onQuickConfirm(e, task)}><i className="bi bi-check-lg"></i></Button>)}
