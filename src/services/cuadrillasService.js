@@ -109,6 +109,36 @@ export const cuadrillasService = {
     }
   },
 
+  // 5b. Obtener trabajadores por proveedor_id (buscando en cuadrillas del proveedor)
+  async getTrabajadoresPorProveedor(proveedorId, proyectoId) {
+    try {
+      // Primero obtenemos las cuadrillas del proveedor en este proyecto
+      const { data: cuadrillas, error: errCuad } = await supabase
+        .from('prod_cuadrillas_proyecto')
+        .select('id')
+        .eq('proveedor_id', proveedorId)
+        .eq('proyecto_id', proyectoId)
+      
+      if (errCuad) throw errCuad
+      if (!cuadrillas || cuadrillas.length === 0) return []
+      
+      // Luego obtenemos todos los trabajadores de esas cuadrillas
+      const cuadrillaIds = cuadrillas.map(c => c.id)
+      const { data, error } = await supabase
+        .from('prod_trabajadores')
+        .select('id, nombre_completo, rut, cargo, activo')
+        .in('cuadrilla_proyecto_id', cuadrillaIds)
+        .eq('activo', true)
+        .order('nombre_completo')
+      
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error cargando trabajadores por proveedor:', error)
+      return []
+    }
+  },
+
   // 6. Guardar Trabajador (Crear o Editar)
   async guardarTrabajador(trabajador) {
     if (trabajador.id) {

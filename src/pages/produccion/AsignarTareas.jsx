@@ -68,6 +68,11 @@ function AsignarTareas() {
   const [selectedTramo, setSelectedTramo] = useState(null)
   const [tramosOpts, setTramosOpts] = useState([])
   
+  // Estados para Trabajador
+  const [cuadrillasRaw, setCuadrillasRaw] = useState([])
+  const [trabajadoresOpts, setTrabajadoresOpts] = useState([])
+  const [selectedTrabajador, setSelectedTrabajador] = useState(null)
+  
   const [dateRange, setDateRange] = useState([null, null])
   const [startDate, endDate] = dateRange
 
@@ -157,6 +162,7 @@ function AsignarTareas() {
 
             // Aplicar datos a estados
             setTareas(t || [])
+            setCuadrillasRaw(c || [])
             setCuadrillasOpts((c || []).map(x => ({ value: x.proveedor?.id, label: x.proveedor?.nombre })).filter(x => x.value))
             const listaProvs = (c || []).map(x => x.proveedor).filter(Boolean)
             setProveedoresFull(listaProvs)
@@ -227,6 +233,27 @@ function AsignarTareas() {
         const t = await zonasService.getTramos(option.value)
         setTramosOpts(t.map(x => ({ value: x.id, label: x.nombre })))
     } else { setTramosOpts([]) }
+  }
+
+  // HANDLER CONTRATISTA (carga trabajadores)
+  const handleContratistaChange = async (option) => {
+    setSelectedCuadrilla(option)
+    setSelectedTrabajador(null)
+    setTrabajadoresOpts([])
+    
+    if (option) {
+      try {
+        const trabajadores = await cuadrillasService.getTrabajadoresPorProveedor(option.value, Number(projectId))
+        const opts = trabajadores.map(t => ({ 
+          value: t.id, 
+          label: `${t.nombre_completo}${t.cargo ? ` (${t.cargo})` : ''}`,
+          rut: t.rut
+        }))
+        setTrabajadoresOpts(opts)
+      } catch (err) {
+        console.error('Error cargando trabajadores:', err)
+      }
+    }
   }
 
   // CÁLCULO FINANCIERO (MULTI-ITEM)
@@ -430,6 +457,7 @@ function AsignarTareas() {
         const payloadTarea = {
             proyecto_id: Number(projectId),
             proveedor_id: selectedCuadrilla?.value || editingTask?.proveedor_id,
+            trabajador_id: selectedTrabajador?.value || null,
             zona_id: selectedZona.value,
             tramo_id: selectedTramo?.value,
             fecha_asignacion: startDate,
@@ -649,6 +677,9 @@ function AsignarTareas() {
     // Reset lista de items multi-tarea
     setTaskList([])
     setTempItem(null)
+    // Reset trabajador
+    setTrabajadoresOpts([])
+    setSelectedTrabajador(null)
     setShowModal(true)
   }
 
@@ -656,6 +687,38 @@ function AsignarTareas() {
     setIsEditing(true)
     setEditingTask(task)
     setSelectedCuadrilla(cuadrillasOpts.find(c => c.value === task.proveedor_id))
+    
+    // CARGAR TRABAJADORES DEL CONTRATISTA Y SELECCIONAR SI EXISTE
+    if (task.proveedor_id) {
+      try {
+        const trabajadores = await cuadrillasService.getTrabajadoresPorProveedor(task.proveedor_id, Number(projectId))
+        const opts = trabajadores.map(t => ({ 
+          value: t.id, 
+          label: `${t.nombre_completo}${t.cargo ? ` (${t.cargo})` : ''}`,
+          rut: t.rut
+        }))
+        setTrabajadoresOpts(opts)
+        
+        // Seleccionar el trabajador si la tarea ya tiene uno asignado
+        if (task.trabajador_id) {
+          const trabOpt = opts.find(o => o.value === task.trabajador_id)
+          setSelectedTrabajador(trabOpt || null)
+        } else if (task.trabajador) {
+          // Fallback: buscar por objeto trabajador si viene con la relación
+          const trabOpt = opts.find(o => o.value === task.trabajador?.id)
+          setSelectedTrabajador(trabOpt || null)
+        } else {
+          setSelectedTrabajador(null)
+        }
+      } catch (err) {
+        console.error('Error cargando trabajadores en edición:', err)
+        setTrabajadoresOpts([])
+        setSelectedTrabajador(null)
+      }
+    } else {
+      setTrabajadoresOpts([])
+      setSelectedTrabajador(null)
+    }
     
     // --- CARGAR ÍTEMS MULTI-TAREA ---
     if(task.items && task.items.length > 0) {
@@ -756,6 +819,9 @@ function AsignarTareas() {
             setMaterialesDisponibles([])
             setDateRange([null, null])
             setSelectedEP(null)
+            // Reset trabajador
+            setTrabajadoresOpts([])
+            setSelectedTrabajador(null)
     }
 
   const loadMateriales = async (provId, taskId) => {
@@ -1021,7 +1087,7 @@ function AsignarTareas() {
                                 options={cuadrillasOpts} 
                                 placeholder="Seleccionar contratista..." 
                                 value={selectedCuadrilla} 
-                                onChange={setSelectedCuadrilla} 
+                                onChange={handleContratistaChange} 
                                 isDisabled={!canEditCore}
                                 styles={{
                                     control: (base, state) => ({ 
@@ -1034,6 +1100,33 @@ function AsignarTareas() {
                                     option: (base, state) => ({
                                         ...base,
                                         backgroundColor: state.isSelected ? '#667eea' : state.isFocused ? '#f0f4ff' : 'white'
+                                    })
+                                }}
+                            />
+                        </Col>
+                        <Col lg={6}>
+                            <Form.Label className="small fw-semibold text-uppercase text-muted mb-2" style={{letterSpacing: '0.5px', fontSize: '11px'}}>
+                                <i className="bi bi-person-fill me-1"></i>Trabajador Responsable
+                            </Form.Label>
+                            <Select 
+                                options={trabajadoresOpts} 
+                                placeholder={selectedCuadrilla ? "Seleccionar trabajador..." : "Primero selecciona contratista"} 
+                                value={selectedTrabajador} 
+                                onChange={setSelectedTrabajador}
+                                isClearable
+                                isDisabled={!selectedCuadrilla}
+                                noOptionsMessage={() => "No hay trabajadores registrados"}
+                                styles={{
+                                    control: (base, state) => ({ 
+                                        ...base, 
+                                        minHeight: '44px',
+                                        borderColor: state.isFocused ? '#17a2b8' : '#dee2e6',
+                                        boxShadow: state.isFocused ? '0 0 0 3px rgba(23,162,184,0.15)' : 'none',
+                                        '&:hover': { borderColor: '#17a2b8' }
+                                    }),
+                                    option: (base, state) => ({
+                                        ...base,
+                                        backgroundColor: state.isSelected ? '#17a2b8' : state.isFocused ? '#e0f7fa' : 'white'
                                     })
                                 }}
                             />
@@ -1637,7 +1730,7 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                                             </div>
 
                                             {/* ... (Cuerpo de la tarjeta igual que antes) ... */}
-                                            <div className="mb-2"><h6 className="fw-bold text-dark mb-0">{task.actividad?.nombre || task.sub_actividad?.nombre}</h6><small className="text-muted">{task.proveedor?.nombre}</small></div>
+                                            <div className="mb-2"><h6 className="fw-bold text-dark mb-0">{task.actividad?.nombre || task.sub_actividad?.nombre}</h6><small className="text-muted">{task.proveedor?.nombre}</small>{task.trabajador && <small className="text-info d-block"><i className="bi bi-person-fill me-1"></i>{task.trabajador.nombre_completo}</small>}</div>
                                             <div className="d-flex gap-1 mb-2"><span className="badge bg-secondary bg-opacity-10 text-dark border">{task.zona?.nombre}</span><span className="badge bg-secondary bg-opacity-10 text-muted border">{task.tramo?.nombre}</span></div>
                                             
                                             {/* PIE DE TARJETA: Aquí agregamos el botón de Emitir */}

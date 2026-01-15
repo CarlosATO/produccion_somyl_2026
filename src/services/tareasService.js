@@ -10,6 +10,7 @@ export const tareasService = {
       .select(`
         *, 
         proveedor:proveedores(*), 
+        trabajador:prod_trabajadores(id, nombre_completo, rut),
         zona:prod_zonas(id, nombre), 
         tramo:prod_tramos(id, nombre),
         estado_pago:prod_estados_pago(id, codigo, estado),
