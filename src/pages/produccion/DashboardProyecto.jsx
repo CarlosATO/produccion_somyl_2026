@@ -90,17 +90,8 @@ function DashboardProyecto() {
   return (
     <div style={{ background: '#f8fafc', minHeight: 'calc(100vh - 64px)' }} className="py-4">
       <Container>
-        <Row className="g-3 mb-4">
-          <Col md={4}>
-            <StatWidget label="Cuadrillas Activas" value="-" icon="bi-people-fill" color="#0ea5e9" />
-          </Col>
-          <Col md={4}>
-            <StatWidget label="Actividades Hoy" value="-" icon="bi-list-check" color="#f59e0b" />
-          </Col>
-          <Col md={4}>
-            <StatWidget label="Incidentes" value="0" icon="bi-exclamation-triangle" color="#ef4444" />
-          </Col>
-        </Row>
+        {/* Widgets removed: Cuadrillas Activas, Actividades Hoy, Incidentes
+            Reservado para estado financiero u otros widgets futuros */}
 
         {/* Nuevo layout en columnas con títulos y tarjetas apiladas */}
         <Row className="g-4 mt-4">
@@ -158,7 +149,7 @@ function DashboardProyecto() {
                 desc="Ingreso diario de actividades ejecutadas."
                 icon="bi-journal-text"
                 color="#f59e0b"
-                link={`/proyecto/${projectId}/registro-actividad`}
+                link={`/proyecto/${projectId}/tareas?view=historial`}
                 active={true}
               />
             </div>
