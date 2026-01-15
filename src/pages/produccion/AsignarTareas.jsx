@@ -9,6 +9,7 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { PDFDownloadLink } from '@react-pdf/renderer' // <--- IMPORTANTE
 import DocumentoEP from '../../components/pdf/DocumentoEP' // <--- EL ARCHIVO NUEVO
+import DocumentoOT from '../../components/pdf/DocumentoOT' // <--- IMPORTAR PDF NUEVO
 import TimelineView from '../../components/TimelineView';
 
 // Servicios
@@ -199,6 +200,17 @@ function AsignarTareas() {
         return subs
     }
   }
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 10 * 1024 * 1024) {
+                        alert("⚠️ ADVERTENCIA: El archivo supera los 10MB.\n\nEsto puede hacer lento el envío y la descarga. Se recomienda comprimir o usar archivos menores a 5MB.");
+                    }
+                    setArchivo(file);
+                }
+            }
+
+  
 
   const getCompatibleEPs = () => {
       if (!editingTask) return []
@@ -1320,23 +1332,38 @@ function AsignarTareas() {
                     </div>
                 </div>
 
-                {/* ARCHIVOS Y EVIDENCIAS */}
+                {/* --- SECCIÓN ARCHIVOS MEJORADA --- */}
                 <div className="px-4 pb-4">
                     <Row className="g-3">
                         <Col md={6}>
-                            <Form.Label className="small fw-semibold text-uppercase text-muted" style={{fontSize: '11px', letterSpacing: '0.5px'}}>
-                                <i className="bi bi-file-earmark-arrow-up me-1"></i>Plano / Evidencia
-                            </Form.Label>
-                            <Form.Control 
-                                type="file" 
-                                onChange={e => setArchivo(e.target.files[0])}
-                                className="bg-light"
-                            />
-                            {archivoUrlExistente && (
-                                <a href={archivoUrlExistente} target="_blank" rel="noreferrer" className="small text-primary d-inline-flex align-items-center gap-1 mt-2">
-                                    <i className="bi bi-eye"></i>Ver archivo actual
-                                </a>
-                            )}
+                            <div className="mt-3 bg-light p-2 rounded border">
+                                <Form.Label className="small fw-bold text-muted mb-1">
+                                    <i className="bi bi-paperclip me-1"></i>Documentación Adjunta
+                                </Form.Label>
+                                <div className="d-flex gap-2 align-items-center">
+                                    <Form.Control 
+                                        type="file" 
+                                        size="sm" 
+                                        onChange={handleFileChange} // <--- USAR EL NUEVO HANDLER
+                                    />
+                                    {/* Botón descarga PDF (Solo si ya existe la tarea) */}
+                                    {isEditing && (
+                                        <PDFDownloadLink
+                                            document={<DocumentoOT tarea={editingTask} items={taskList} proyecto={proyectoInfo} />}
+                                            fileName={`OT_${editingTask.id}_${editingTask.proveedor?.nombre?.slice(0,10)}.pdf`}
+                                            className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
+                                        >
+                                            {({ loading }) => loading ? '...' : <><i className="bi bi-file-pdf"></i> OT</>}
+                                        </PDFDownloadLink>
+                                    )}
+                                </div>
+                                {archivoUrlExistente && (
+                                    <div className="small mt-1 text-success">
+                                        <i className="bi bi-check-circle me-1"></i>
+                                        <a href={archivoUrlExistente} target="_blank" rel="noreferrer">Ver archivo actual</a>
+                                    </div>
+                                )}
+                            </div>
                         </Col>
                     </Row>
                 </div>
