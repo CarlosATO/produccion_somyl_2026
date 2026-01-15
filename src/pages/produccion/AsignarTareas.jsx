@@ -11,6 +11,7 @@ import { PDFDownloadLink } from '@react-pdf/renderer' // <--- IMPORTANTE
 import DocumentoEP from '../../components/pdf/DocumentoEP' // <--- EL ARCHIVO NUEVO
 import DocumentoOT from '../../components/pdf/DocumentoOT' // <--- IMPORTAR PDF NUEVO
 import TimelineView from '../../components/TimelineView';
+import HistorialTareas from './HistorialTareas' // <--- HISTORIAL
 
 // Servicios
 import { tareasService } from '../../services/tareasService'
@@ -604,29 +605,38 @@ function AsignarTareas() {
         }
 
         // 🔥 NUEVA LÓGICA: ASIGNACIÓN AUTOMÁTICA AL ENTRAR A APROBADA
+        // ⚠️ EXCEPCIÓN: Si el proveedor es "Somyl", NO asignar EP (es trabajo propio)
         if (newStatus === 'APROBADA' && oldStatus !== 'APROBADA') {
             // 1. Buscamos la tarea completa para saber quién es el proveedor
             const tareaActual = tareas.find(t => t.id === movedId);
             if (tareaActual) {
-                try {
-                    // 2. Obtenemos el prefijo limpio del proyecto para el código
-                    const codigoBase = `EP-${getProyectoCodigoBase()}`;
+                // 2. Verificar si es Somyl (trabajo propio, no necesita EP)
+                const esSomyl = tareaActual.proveedor?.nombre?.toLowerCase().includes('somyl');
+                
+                if (!esSomyl) {
+                    // Solo asignar EP a subcontratistas (no Somyl)
+                    try {
+                        // 3. Obtenemos el prefijo limpio del proyecto para el código
+                        const codigoBase = `EP-${getProyectoCodigoBase()}`;
 
-                    // 3. LLAMADA MÁGICA: El backend busca huecos, crea o asigna
-                    const epAsignado = await estadosPagoService.asignarBorradorAutomatico(
-                        Number(projectId),
-                        codigoBase,
-                        tareaActual.proveedor_id
-                    );
+                        // 4. LLAMADA MÁGICA: El backend busca huecos, crea o asigna
+                        const epAsignado = await estadosPagoService.asignarBorradorAutomatico(
+                            Number(projectId),
+                            codigoBase,
+                            tareaActual.proveedor_id
+                        );
 
-                    // 4. Asignamos el ID del EP retornado a la tarea
-                    if (epAsignado && epAsignado.id) {
-                        extraData.estado_pago_id = epAsignado.id;
-                        // 5. (Opcional) Forzamos recarga rápida para que aparezca la etiqueta negra "EP-..."
-                        setTimeout(() => loadInitialData(), 500);
+                        // 5. Asignamos el ID del EP retornado a la tarea
+                        if (epAsignado && epAsignado.id) {
+                            extraData.estado_pago_id = epAsignado.id;
+                            // 6. (Opcional) Forzamos recarga rápida para que aparezca la etiqueta negra "EP-..."
+                            setTimeout(() => loadInitialData(), 500);
+                        }
+                    } catch (errEp) {
+                        console.error('Error asignando EP automático:', errEp);
                     }
-                } catch (errEp) {
-                    console.error('Error asignando EP automático:', errEp);
+                } else {
+                    console.log('📌 Tarea de Somyl - No se asigna EP (trabajo propio)');
                 }
             }
         }
@@ -876,6 +886,32 @@ function AsignarTareas() {
   const isExecutionPhase = isEditing && editingTask?.estado !== 'ASIGNADA'
     const canManageMaterials = editingTask?.estado === 'REALIZADA'
 
+  // --- RESTAURAR TAREA (HISTORIAL) ---
+  const handleRestaurar = async (task) => {
+      if(!window.confirm(`¿Restaurar la tarea #${task.id} al tablero de ejecución?`)) return
+      try {
+          // Vuelve a REALIZADA para que aparezca en la columna central
+          await tareasService.actualizarEstado(task.id, 'REALIZADA')
+          alert("Tarea restaurada correctamente.")
+          loadInitialData()
+          setViewMode('kanban') // Volvemos al tablero para verla
+      } catch (err) { alert("Error al restaurar"); console.error(err) }
+  }
+
+  // --- FINALIZAR TAREA SOMYL (Trabajo propio, sin EP) ---
+  const handleFinalizarSomyl = async (task) => {
+      if(!window.confirm(`¿Finalizar y archivar la tarea #${task.id} de Somyl?\n\nEsta acción moverá la tarea al Historial.`)) return
+      try {
+          // Cambiamos el estado a PAGADA (para que salga del tablero y vaya al historial)
+          // Nota: Usamos PAGADA porque FINALIZADA no existe como estado válido en la BD
+          await tareasService.actualizarEstado(task.id, 'PAGADA', { 
+              fecha_termino_real: new Date() 
+          })
+          alert("Tarea finalizada y archivada correctamente.")
+          loadInitialData()
+      } catch (err) { alert("Error al finalizar"); console.error(err) }
+  }
+
   return (
     <div className="container-fluid d-flex flex-column bg-white" style={{height: 'calc(100vh - 64px)'}}>
       {/* HEADER */}
@@ -902,6 +938,13 @@ function AsignarTareas() {
                         onClick={() => setViewMode('timeline')}
                     >
                         <i className="bi bi-calendar-range me-2"></i>Cronograma
+                    </button>
+                    <button 
+                        type="button" 
+                        className={`btn btn-sm ${viewMode === 'historial' ? 'btn-primary' : 'btn-outline-secondary bg-white'}`}
+                        onClick={() => setViewMode('historial')}
+                    >
+                        <i className="bi bi-clock-history me-2"></i>Historial
                     </button>
                 </div>
                 {/* -------------------------------- */}
@@ -953,6 +996,7 @@ function AsignarTareas() {
                                             alert("Error: No se encuentra el borrador asociado.");
                                         }
                                     }}
+                                    onFinalizarSomyl={handleFinalizarSomyl}
                                 />
 
                                 {/* 4. COLUMNA GESTIÓN FINANCIERA (Solo Emitidos y Pagados) */}
@@ -999,7 +1043,8 @@ function AsignarTareas() {
                             </div>
                         </DragDropContext>
                     ) : (
-                        /* VISTA 2: CRONOGRAMA (Lo nuevo) */
+                        viewMode === 'timeline' ? (
+                        /* VISTA 2: CRONOGRAMA */
                         <div className="h-100 overflow-auto">
                             <TimelineView 
                                 tareas={filteredTasks}
@@ -1017,7 +1062,14 @@ function AsignarTareas() {
                                 }}
                             />
                         </div>
-                    )}
+                    ) : (
+                        /* VISTA 3: HISTORIAL */
+                        <HistorialTareas 
+                            tareas={tareas}
+                            onVerDetalle={(task) => openEditModal(task)}
+                            onRestaurar={handleRestaurar}
+                        />
+                    ))}
                 </div>
             )}
 
@@ -1711,7 +1763,7 @@ function AsignarTareas() {
   )
 }
 
-const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onEmitirFromTask }) => (
+const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onEmitirFromTask, onFinalizarSomyl }) => (
     <div className="d-flex flex-column h-100 rounded-3 shadow-sm" style={{flex: '1 1 0px', minWidth: '250px', backgroundColor: '#ebecf0', padding: '8px'}}>
         <div className="d-flex align-items-center justify-content-between mb-2 px-1"><span className="fw-bold text-dark small text-uppercase">{title}</span><span className="badge bg-secondary rounded-pill text-white">{tasks.length}</span></div>
         <Droppable droppableId={id}>
@@ -1740,8 +1792,8 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                                                 {/* BOTÓN CHECK RÁPIDO (EXISTENTE) */}
                                                 {(id === 'ASIGNADA' || id === 'REALIZADA') && (<Button variant="outline-success" size="sm" className="rounded-circle p-0" style={{width: '28px', height: '28px'}} onClick={(e) => onQuickConfirm(e, task)}><i className="bi bi-check-lg"></i></Button>)}
                                                 
-                                                {/* 🔥 BOTÓN DE EMISIÓN (NUEVO - SOLO EN APROBADA) */}
-                                                {id === 'APROBADA' && (
+                                                {/* 🔥 BOTÓN DE EMISIÓN (SOLO SUBCONTRATISTAS - NO SOMYL) */}
+                                                {id === 'APROBADA' && !task.proveedor?.nombre?.toLowerCase().includes('somyl') && (
                                                     <Button 
                                                         variant="primary" 
                                                         size="sm" 
@@ -1753,6 +1805,22 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                                                         }}
                                                     >
                                                         <i className="bi bi-cash-stack me-1"></i>Emitir
+                                                    </Button>
+                                                )}
+                                                
+                                                {/* 🏠 BOTÓN FINALIZAR (SOLO SOMYL - TRABAJO PROPIO) */}
+                                                {id === 'APROBADA' && task.proveedor?.nombre?.toLowerCase().includes('somyl') && (
+                                                    <Button 
+                                                        variant="secondary" 
+                                                        size="sm" 
+                                                        className="py-0 px-2 shadow-sm" 
+                                                        style={{fontSize: '0.75rem', height: '24px'}}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onFinalizarSomyl(task);
+                                                        }}
+                                                    >
+                                                        <i className="bi bi-archive me-1"></i>Finalizar
                                                     </Button>
                                                 )}
                                             </div>
