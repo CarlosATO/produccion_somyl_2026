@@ -1,0 +1,111 @@
+.
+├── arquitectura_completa.txt
+├── arquitectura_proyecto.txt
+├── modulo_logistica
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public
+│   │   ├── inventario.xlsx
+│   │   └── vite.svg
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.jsx
+│   │   ├── InventoryReport.jsx
+│   │   ├── LogisticaHome.jsx
+│   │   ├── ReportesMenu.jsx
+│   │   ├── assets
+│   │   │   └── react.svg
+│   │   ├── components
+│   │   │   ├── DispatchHistory.jsx
+│   │   │   ├── DispatchPDF.jsx
+│   │   │   └── WMSTopBar.jsx
+│   │   ├── context
+│   │   │   └── AuthContext.jsx
+│   │   ├── hooks
+│   │   ├── index.css
+│   │   ├── main.jsx
+│   │   ├── pages
+│   │   │   ├── InboundReception.jsx
+│   │   │   ├── InventoryDashboard.jsx
+│   │   │   ├── InventoryViewer.jsx
+│   │   │   ├── LocationSettings.jsx
+│   │   │   ├── OutboundDispatch.jsx
+│   │   │   ├── ProductList.jsx
+│   │   │   ├── ProjectSettings.jsx
+│   │   │   ├── PutAway.jsx
+│   │   │   ├── SupplierSettings.jsx
+│   │   │   ├── ThirdPartySettings.jsx
+│   │   │   ├── TransferMaterial.jsx
+│   │   │   └── WarehouseSettings.jsx
+│   │   └── services
+│   │       ├── procurementClient.js
+│   │       └── supabaseClient.js
+│   ├── tailwind.config.js
+│   └── vite.config.js
+└── portal_sso
+    ├── DEPLOY.md
+    ├── Dockerfile
+    ├── Procfile
+    ├── README.md
+    ├── REDME_PROD_MOD-MD
+    ├── app.py
+    ├── check_schema.py
+    ├── docker-compose.prod.yml
+    ├── frontend
+    │   ├── README.md
+    │   ├── eslint.config.js
+    │   ├── index.html
+    │   ├── package-lock.json
+    │   ├── package.json
+    │   ├── postcss.config.cjs
+    │   ├── postcss.config.js
+    │   ├── public
+    │   │   ├── INSTRUCCIONES_LOGO.md
+    │   │   ├── logo-somyl.ico
+    │   │   └── vite.svg
+    │   ├── src
+    │   │   ├── App.css
+    │   │   ├── App.jsx
+    │   │   ├── assets
+    │   │   │   └── react.svg
+    │   │   ├── components
+    │   │   │   ├── Admin.jsx
+    │   │   │   ├── Dashboard.jsx
+    │   │   │   └── Login.jsx
+    │   │   ├── index.css
+    │   │   ├── main.jsx
+    │   │   └── modules
+    │   │       └── usuarios
+    │   │           ├── README.md
+    │   │           ├── UsuariosPage.jsx
+    │   │           ├── components
+    │   │           │   ├── UsuarioModal.jsx
+    │   │           │   └── UsuariosTable.jsx
+    │   │           ├── index.js
+    │   │           ├── useUsuarios.js
+    │   │           └── usuariosService.js
+    │   ├── tailwind.config.cjs
+    │   ├── tailwind.config.js
+    │   └── vite.config.js
+    ├── main.py
+    ├── manual_integracion.md
+    ├── migrations
+    │   └── 001_add_is_superuser.sql
+    ├── requirements.txt
+    ├── routes
+    │   ├── __init__.py
+    │   ├── auth.py
+    │   └── usuarios.py
+    ├── scripts
+    │   ├── build_and_copy.sh
+    │   ├── push_to_new_repo.sh
+    │   └── start.sh
+    ├── set_admin.py
+    ├── templates
+    └── update_user_admin.py
+
+23 directories, 86 files
