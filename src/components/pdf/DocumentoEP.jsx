@@ -75,9 +75,36 @@ const styles = StyleSheet.create({
 });
 
 const DocumentoEP = ({ epData, tareas, proyectoInfo, descuentos = [] }) => {
-  // 1. Cálculos
+  // 1. Expandir items de tareas (si tiene items, mostrar esos; sino, mostrar la cabecera)
+  const itemsExpandidos = [];
+  tareas.forEach(tarea => {
+    if (tarea.items && tarea.items.length > 0) {
+      tarea.items.forEach(item => {
+        itemsExpandidos.push({
+          nombre: item.actividad?.nombre || item.sub_actividad?.nombre || 'Actividad',
+          zona: tarea.zona?.nombre || 'S/I',
+          tramo: tarea.tramo?.nombre || '',
+          cantidad: item.cantidad_real || item.cantidad_asignada || 0,
+          precio: item.precio_costo_unitario || 0,
+          tareaId: tarea.id
+        });
+      });
+    } else {
+      // Fallback: mostrar tarea como un solo item
+      itemsExpandidos.push({
+        nombre: tarea.actividad?.nombre || tarea.sub_actividad?.nombre || 'Item sin nombre',
+        zona: tarea.zona?.nombre || 'S/I',
+        tramo: tarea.tramo?.nombre || '',
+        cantidad: tarea.cantidad_real || tarea.cantidad_asignada || 0,
+        precio: tarea.precio_costo_unitario || 0,
+        tareaId: tarea.id
+      });
+    }
+  });
+
+  // 2. Cálculos basados en items expandidos
   const fechaEmision = format(new Date(), 'dd MMMM yyyy', { locale: es });
-  const subtotal = tareas.reduce((acc, t) => acc + (Number(t.cantidad_real) * Number(t.precio_costo_unitario)), 0);
+  const subtotal = itemsExpandidos.reduce((acc, item) => acc + (Number(item.cantidad) * Number(item.precio)), 0);
   
   // Sumar descuentos (asumiendo que vienen como objetos {nombre, monto})
   const totalDescuentos = descuentos.reduce((acc, d) => acc + Number(d.monto), 0);
@@ -134,22 +161,22 @@ const DocumentoEP = ({ epData, tareas, proyectoInfo, descuentos = [] }) => {
                 <Text style={[styles.colTotal, styles.textHeader]}>TOTAL</Text>
             </View>
 
-            {tareas.map((item, index) => (
+            {itemsExpandidos.map((item, index) => (
                 <View style={styles.tableRow} key={index}>
                     <Text style={[styles.colDesc, styles.textRow]}>
-                        {item.actividad?.nombre || item.sub_actividad?.nombre || 'Item sin nombre'}
+                        {item.nombre}
                     </Text>
                     <Text style={[styles.colRef, styles.textRow]}>
-                        {item.zona?.nombre || 'S/I'} {item.tramo?.nombre ? `- ${item.tramo.nombre}` : ''}
+                        {item.zona} {item.tramo ? `- ${item.tramo}` : ''}
                     </Text>
                     <Text style={[styles.colQty, styles.textRow]}>
-                        {item.cantidad_real}
+                        {item.cantidad}
                     </Text>
                     <Text style={[styles.colPrice, styles.textRow]}>
-                        {currency(item.precio_costo_unitario)}
+                        {currency(item.precio)}
                     </Text>
                     <Text style={[styles.colTotal, styles.textRow, {fontWeight: 'bold'}]}>
-                        {currency(item.cantidad_real * item.precio_costo_unitario)}
+                        {currency(item.cantidad * item.precio)}
                     </Text>
                 </View>
             ))}
