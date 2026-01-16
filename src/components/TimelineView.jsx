@@ -61,18 +61,41 @@ const TimelineView = ({ tareas, proveedores, onEditTask, onResizeTask }) => {
       const nombreProv = mapaProveedores[provId] || `ID: ${provId}`;
       const filaInicio = filaActual;
 
-      // Agrupar tareas del mismo proveedor por nombre de actividad
-      const tareasPorActividad = {};
+      // Expandir items: si una tarea tiene items, crear una entrada por cada item
+      const itemsExpandidos = [];
       listaTareas.forEach(t => {
-          let nombreActividad = 'Sin Descripción';
-          if (t.actividad && t.actividad.nombre) nombreActividad = t.actividad.nombre;
-          else if (t.sub_actividad && t.sub_actividad.nombre) nombreActividad = t.sub_actividad.nombre;
-          else if (t.item) nombreActividad = t.item;
-
-          if (!tareasPorActividad[nombreActividad]) {
-              tareasPorActividad[nombreActividad] = [];
+          if (t.items && t.items.length > 0) {
+              // Tarea con múltiples items - expandir cada uno
+              t.items.forEach(item => {
+                  const nombreActividad = item.actividad?.nombre || item.sub_actividad?.nombre || 'Sin Descripción';
+                  itemsExpandidos.push({
+                      ...t,
+                      nombreActividad,
+                      itemId: item.id
+                  });
+              });
+          } else {
+              // Tarea antigua sin items o con un solo item implícito
+              let nombreActividad = 'Sin Descripción';
+              if (t.actividad && t.actividad.nombre) nombreActividad = t.actividad.nombre;
+              else if (t.sub_actividad && t.sub_actividad.nombre) nombreActividad = t.sub_actividad.nombre;
+              else if (t.item) nombreActividad = t.item;
+              
+              itemsExpandidos.push({
+                  ...t,
+                  nombreActividad,
+                  itemId: null
+              });
           }
-          tareasPorActividad[nombreActividad].push(t);
+      });
+
+      // Agrupar items expandidos por nombre de actividad
+      const tareasPorActividad = {};
+      itemsExpandidos.forEach(t => {
+          if (!tareasPorActividad[t.nombreActividad]) {
+              tareasPorActividad[t.nombreActividad] = [];
+          }
+          tareasPorActividad[t.nombreActividad].push(t);
       });
 
       // Ordenar actividades alfabéticamente
