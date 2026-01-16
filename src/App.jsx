@@ -12,6 +12,7 @@ import GestionZonas from './pages/produccion/GestionZonas';
 import GestionDescuentos from './pages/produccion/GestionDescuentos';
 import ResumenSubcontrato from './pages/produccion/reportes/ResumenSubcontrato';
 import ProduccionActividad from './pages/produccion/reportes/ProduccionActividad';
+import EstadosPagos from './pages/produccion/reportes/EstadosPagos';
 
 // --- Placeholder Components ---
 const Reportes = () => <div className="p-5"><h1>Reportes</h1></div>;
@@ -81,6 +82,10 @@ function ProtectedLayout() {
           <Route
             path="/proyecto/:projectId/reportes/produccion-actividad"
             element={<ProduccionActividad />}
+          />
+          <Route
+            path="/proyecto/:projectId/reportes/estado-pagos"
+            element={<EstadosPagos />}
           />
           {/* Aquí agregaremos Zonas, Reportes, Avance... */}
 
