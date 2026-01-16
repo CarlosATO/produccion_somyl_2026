@@ -99,7 +99,7 @@ function DashboardProyecto() {
             <h6 className="text-muted fw-bold text-uppercase mb-3">Configuraciones</h6>
             <div className="d-flex flex-column gap-3">
               <ModuleCard 
-                title="Cuadrillas" 
+                title="Cuadrillas y Personal Somyl" 
                 desc="Gestión de subcontratos y trabajadores."
                 icon="bi-people-fill"
                 color="#0ea5e9" 
@@ -107,8 +107,8 @@ function DashboardProyecto() {
                 active={true}
               />
               <ModuleCard
-                title="Actividades"
-                desc="Planifica y gestiona actividades diarias."
+                title="Actividades y costos"
+                desc="Lista de actividades y subactividades y sus costos."
                 icon="bi-list-task"
                 color="#ef4444"
                 link={`/proyecto/${projectId}/actividades`}
@@ -145,8 +145,8 @@ function DashboardProyecto() {
                 active={true}
               />
               <ModuleCard
-                title="Registro de Actividad"
-                desc="Ingreso diario de actividades ejecutadas."
+                title="Historial de Actividad"
+                desc="Actividades ejecutadas y grabadas."
                 icon="bi-journal-text"
                 color="#f59e0b"
                 link={`/proyecto/${projectId}/tareas?view=historial`}
