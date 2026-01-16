@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Modal, Button, Form, Row, Col, Card, Badge, Spinner } from 'react-bootstrap'
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
@@ -44,7 +45,11 @@ function AsignarTareas() {
     const [epToManage, setEpToManage] = useState(null)
         const [proveedoresFull, setProveedoresFull] = useState([]) // <--- Nuevo almacén de datos
     // Controla qué vista estamos viendo: 'kanban' o 'timeline'
-    const [viewMode, setViewMode] = useState('kanban');
+    // Inicializar vista desde query param ?view=historial (p. ej.)
+    const location = useLocation()
+    const params = new URLSearchParams(location.search)
+    const initialView = params.get('view') || 'kanban'
+    const [viewMode, setViewMode] = useState(initialView);
 
   // Filtros
   const [filterProv, setFilterProv] = useState(null)
@@ -1772,57 +1777,47 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                     {tasks.map((task, index) => (
                         <Draggable key={task.id} draggableId={String(task.id)} index={index}>
                             {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className="mb-2" onDoubleClick={() => onDblClick(task)}>
-                                    <Card className={`border-0 shadow-sm task-card-hover ${id === 'APROBADA' ? 'bg-success bg-opacity-10 border border-success' : ''}`}>
-                                        <Card.Body className="p-3">
-                                            {/* ... (Cabecera con fechas y badge EP igual que antes) ... */}
-                                            <div className="d-flex justify-content-between align-items-center mb-2">
-                                                <Badge bg={id==='APROBADA'?'success':'light'} text={id==='APROBADA'?'white':'dark'} className="border fw-normal d-flex align-items-center gap-1"><i className="bi bi-calendar3"></i>{task.fecha_asignacion ? format(parseISO(task.fecha_asignacion), 'dd/MM') : '--'}</Badge>
-                                                {task.estado_pago && <Badge bg="dark" className="ms-2">{task.estado_pago.codigo}</Badge>}
+                                <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className="mb-1" onDoubleClick={() => onDblClick(task)}>
+                                    <Card className={`border-0 shadow-sm task-card-hover ${id === 'APROBADA' ? 'bg-success bg-opacity-10' : ''}`} style={{fontSize: '0.8rem'}}>
+                                        <Card.Body className="p-2">
+                                            {/* FILA 1: Actividad + EP Badge */}
+                                            <div className="d-flex justify-content-between align-items-start gap-1 mb-1">
+                                                <span className="fw-semibold text-dark text-truncate" style={{flex: 1, lineHeight: 1.2}} title={task.actividad?.nombre || task.sub_actividad?.nombre}>
+                                                    {task.actividad?.nombre || task.sub_actividad?.nombre || 'Sin actividad'}
+                                                </span>
+                                                {task.estado_pago && <Badge bg="dark" className="flex-shrink-0" style={{fontSize: '0.65rem'}}>{task.estado_pago.codigo?.split('-').pop()}</Badge>}
                                             </div>
-
-                                            {/* ... (Cuerpo de la tarjeta igual que antes) ... */}
-                                            <div className="mb-2"><h6 className="fw-bold text-dark mb-0">{task.actividad?.nombre || task.sub_actividad?.nombre}</h6><small className="text-muted">{task.proveedor?.nombre}</small>{task.trabajador && <small className="text-info d-block"><i className="bi bi-person-fill me-1"></i>{task.trabajador.nombre_completo}</small>}</div>
-                                            <div className="d-flex gap-1 mb-2"><span className="badge bg-secondary bg-opacity-10 text-dark border">{task.zona?.nombre}</span><span className="badge bg-secondary bg-opacity-10 text-muted border">{task.tramo?.nombre}</span></div>
                                             
-                                            {/* PIE DE TARJETA: Aquí agregamos el botón de Emitir */}
-                                            <div className="border-top pt-2 mt-2 d-flex justify-content-between align-items-end">
-                                                <div className="lh-1"><span className="d-block small">Plan: <strong>{task.items?.reduce((sum, i) => sum + (i.cantidad_asignada || 0), 0) || task.cantidad_asignada || 0}</strong></span><span className={`d-block small ${task.cantidad_real || task.items?.some(i => i.cantidad_real) ? 'text-success fw-bold' : 'text-muted'}`}>Real: {task.items?.reduce((sum, i) => sum + (i.cantidad_real || 0), 0) || task.cantidad_real || '-'}</span></div>
-                                                
-                                                {/* BOTÓN CHECK RÁPIDO (EXISTENTE) */}
-                                                {(id === 'ASIGNADA' || id === 'REALIZADA') && (<Button variant="outline-success" size="sm" className="rounded-circle p-0" style={{width: '28px', height: '28px'}} onClick={(e) => onQuickConfirm(e, task)}><i className="bi bi-check-lg"></i></Button>)}
-                                                
-                                                {/* 🔥 BOTÓN DE EMISIÓN (SOLO SUBCONTRATISTAS - NO SOMYL) */}
-                                                {id === 'APROBADA' && !task.proveedor?.nombre?.toLowerCase().includes('somyl') && (
-                                                    <Button 
-                                                        variant="primary" 
-                                                        size="sm" 
-                                                        className="py-0 px-2 shadow-sm" 
-                                                        style={{fontSize: '0.75rem', height: '24px'}}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation(); // Para que no abra el editar
-                                                            onEmitirFromTask(task);
-                                                        }}
-                                                    >
-                                                        <i className="bi bi-cash-stack me-1"></i>Emitir
-                                                    </Button>
-                                                )}
-                                                
-                                                {/* 🏠 BOTÓN FINALIZAR (SOLO SOMYL - TRABAJO PROPIO) */}
-                                                {id === 'APROBADA' && task.proveedor?.nombre?.toLowerCase().includes('somyl') && (
-                                                    <Button 
-                                                        variant="secondary" 
-                                                        size="sm" 
-                                                        className="py-0 px-2 shadow-sm" 
-                                                        style={{fontSize: '0.75rem', height: '24px'}}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onFinalizarSomyl(task);
-                                                        }}
-                                                    >
-                                                        <i className="bi bi-archive me-1"></i>Finalizar
-                                                    </Button>
-                                                )}
+                                            {/* FILA 2: Proveedor + Trabajador (compacto) */}
+                                            <div className="text-muted mb-1" style={{fontSize: '0.7rem', lineHeight: 1.3}}>
+                                                <span>{task.proveedor?.nombre}</span>
+                                                {task.trabajador && <span className="text-info"> • {task.trabajador.nombre_completo}</span>}
+                                            </div>
+                                            
+                                            {/* FILA 3: Zona/Tramo + Fecha + Cantidades + Acción */}
+                                            <div className="d-flex justify-content-between align-items-center pt-1 border-top" style={{fontSize: '0.7rem'}}>
+                                                <div className="d-flex align-items-center gap-1 text-muted">
+                                                    <span className="badge bg-light text-dark border-0 p-0 fw-normal">{task.zona?.nombre}</span>
+                                                    {task.tramo?.nombre && <span>• {task.tramo.nombre}</span>}
+                                                </div>
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <span className="text-muted">{task.fecha_asignacion ? format(parseISO(task.fecha_asignacion), 'dd/MM') : '--'}</span>
+                                                    <span className="fw-bold">{task.items?.reduce((sum, i) => sum + (i.cantidad_asignada || 0), 0) || task.cantidad_asignada || 0}</span>
+                                                    <span className={task.items?.some(i => i.cantidad_real) ? 'text-success fw-bold' : 'text-muted'}>
+                                                        {task.items?.reduce((sum, i) => sum + (i.cantidad_real || 0), 0) || task.cantidad_real || '-'}
+                                                    </span>
+                                                    
+                                                    {/* ACCIONES COMPACTAS */}
+                                                    {(id === 'ASIGNADA' || id === 'REALIZADA') && (
+                                                        <Button variant="outline-success" size="sm" className="rounded-circle p-0 border-0" style={{width: '20px', height: '20px', fontSize: '0.7rem'}} onClick={(e) => onQuickConfirm(e, task)}><i className="bi bi-check-lg"></i></Button>
+                                                    )}
+                                                    {id === 'APROBADA' && !task.proveedor?.nombre?.toLowerCase().includes('somyl') && (
+                                                        <Button variant="primary" size="sm" className="py-0 px-1" style={{fontSize: '0.65rem', height: '18px'}} onClick={(e) => { e.stopPropagation(); onEmitirFromTask(task); }}>EP</Button>
+                                                    )}
+                                                    {id === 'APROBADA' && task.proveedor?.nombre?.toLowerCase().includes('somyl') && (
+                                                        <Button variant="secondary" size="sm" className="py-0 px-1" style={{fontSize: '0.65rem', height: '18px'}} onClick={(e) => { e.stopPropagation(); onFinalizarSomyl(task); }}>✓</Button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </Card.Body>
                                     </Card>
