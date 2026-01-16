@@ -199,6 +199,17 @@ const ResumenSubcontrato = () => {
 
       {/* 2. TARJETAS DE TOTALES (KPIs) */}
       <div className="row g-3 mb-4">
+        {/* Venta Total (Ingreso) */}
+        <div className="col-md-3">
+          <Card className="border-0 shadow-sm border-start border-4 border-info h-100">
+            <Card.Body>
+              <small className="text-muted text-uppercase fw-bold" style={{fontSize: '0.75rem'}}>Total Venta (Ingreso)</small>
+              <h4 className="fw-bold text-dark mt-1 mb-0">{formatMoney(totales.venta)}</h4>
+              <small className="text-muted" style={{fontSize: '0.7rem'}}>Lo que cobras al Cliente</small>
+            </Card.Body>
+          </Card>
+        </div>
+
         {/* Costo Total (Producción Real) */}
         <div className="col-md-3">
           <Card className="border-0 shadow-sm border-start border-4 border-primary h-100">
@@ -210,29 +221,18 @@ const ResumenSubcontrato = () => {
           </Card>
         </div>
 
-        {/* Venta Total (Ingreso) */}
-        <div className="col-md-3">
-          <Card className="border-0 shadow-sm border-start border-4 border-info h-100">
-            <Card.Body>
-              <small className="text-muted text-uppercase fw-bold" style={{fontSize: '0.75rem'}}>Total Venta (Estimado)</small>
-              <h4 className="fw-bold text-dark mt-1 mb-0">{formatMoney(totales.venta)}</h4>
-              <small className="text-muted" style={{fontSize: '0.7rem'}}>Lo que cobras al Cliente</small>
-            </Card.Body>
-          </Card>
-        </div>
-
-        {/* Pagado / Emitido */}
+        {/* Ganancia Total */}
         <div className="col-md-3">
           <Card className="border-0 shadow-sm border-start border-4 border-success h-100">
             <Card.Body>
-              <small className="text-muted text-uppercase fw-bold" style={{fontSize: '0.75rem'}}>Estados de Pago (Emitidos)</small>
-              <h4 className="fw-bold text-success mt-1 mb-0">{formatMoney(totales.emitido)}</h4>
-              <small className="text-muted" style={{fontSize: '0.7rem'}}>Deuda Saldada / Procesada</small>
+              <small className="text-muted text-uppercase fw-bold" style={{fontSize: '0.75rem'}}>Ganancia Bruta</small>
+              <h4 className="fw-bold text-success mt-1 mb-0">{formatMoney(totales.venta - totales.costo)}</h4>
+              <small className="text-muted" style={{fontSize: '0.7rem'}}>Venta - Producción</small>
             </Card.Body>
           </Card>
         </div>
 
-        {/* Pendiente (Deuda) */}
+        {/* Pendiente de Pago */}
         <div className="col-md-3">
           <Card className="border-0 shadow-sm border-start border-4 border-warning h-100">
             <Card.Body>
@@ -255,7 +255,9 @@ const ResumenSubcontrato = () => {
               <tr>
                 <th className="py-3 ps-4 border-0">Subcontrato</th>
                 <th className="py-3 text-center border-0">Tareas</th>
+                <th className="py-3 text-end border-0">Venta ($)</th>
                 <th className="py-3 text-end border-0">Producción ($)</th>
+                <th className="py-3 text-end text-success border-0">Ganancia ($)</th>
                 <th className="py-3 text-end text-success border-0">Emitido ($)</th>
                 <th className="py-3 text-end text-warning pe-4 border-0">Pendiente ($)</th>
               </tr>
@@ -269,8 +271,14 @@ const ResumenSubcontrato = () => {
                   <td className="text-center">
                     <Badge bg="light" text="dark" className="border">{row.trabajos_count}</Badge>
                   </td>
+                  <td className="text-end fw-bold text-info">
+                    {formatMoney(row.produccion_venta)}
+                  </td>
                   <td className="text-end fw-bold text-secondary" style={{cursor: 'pointer'}} onClick={() => handleClickCell('produccion', row)}>
                     <span style={{textDecoration: 'underline'}}>{formatMoney(row.produccion_costo)}</span>
+                  </td>
+                  <td className="text-end fw-bold text-success">
+                    {formatMoney(row.produccion_venta - row.produccion_costo)}
                   </td>
                   <td className="text-end text-success fw-medium" style={{cursor: 'pointer'}} onClick={() => handleClickCell('emitido', row)}>
                     <span style={{textDecoration: 'underline'}}>{formatMoney(row.monto_emitido)}</span>
@@ -283,7 +291,7 @@ const ResumenSubcontrato = () => {
               
               {data.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="text-center py-5 text-muted fst-italic">
+                  <td colSpan="7" className="text-center py-5 text-muted fst-italic">
                     No hay registros de producción con costo para este proyecto.
                   </td>
                 </tr>
@@ -296,7 +304,9 @@ const ResumenSubcontrato = () => {
                     <tr>
                         <td className="ps-4 text-uppercase">Totales</td>
                         <td className="text-center">-</td>
+                        <td className="text-end text-info">{formatMoney(totales.venta)}</td>
                         <td className="text-end">{formatMoney(totales.costo)}</td>
+                        <td className="text-end text-success">{formatMoney(totales.venta - totales.costo)}</td>
                         <td className="text-end text-success">{formatMoney(totales.emitido)}</td>
                         <td className="text-end text-warning pe-4">{formatMoney(totales.pendiente)}</td>
                     </tr>
@@ -326,8 +336,10 @@ const ResumenSubcontrato = () => {
                   <th>Actividad</th>
                   <th className="text-center">Zona</th>
                   <th className="text-center">Cant.</th>
-                  <th className="text-end">P. Unit</th>
-                  <th className="text-end">Total</th>
+                  <th className="text-end">P. Costo</th>
+                  <th className="text-end">Costo</th>
+                  <th className="text-end">P. Venta</th>
+                  <th className="text-end">Venta</th>
                   {modalData.tipo === 'emitido' && <th className="text-center">EP</th>}
                 </tr>
               </thead>
@@ -339,17 +351,20 @@ const ResumenSubcontrato = () => {
                     <td className="text-center">{t.cantidad}</td>
                     <td className="text-end">{formatMoney(t.precio_unitario)}</td>
                     <td className="text-end fw-bold">{formatMoney(t.costo)}</td>
+                    <td className="text-end text-info">{formatMoney(t.precio_venta_unitario || 0)}</td>
+                    <td className="text-end fw-bold text-info">{formatMoney(t.venta)}</td>
                     {modalData.tipo === 'emitido' && <td className="text-center"><small>{t.codigo_ep || '-'}</small></td>}
                   </tr>
                 ))}
               </tbody>
               <tfoot className="fw-bold bg-light border-top">
                 <tr>
-                  <td colSpan={modalData.tipo === 'emitido' ? 5 : 4} className="text-end">
-                    Total:
+                  <td colSpan={modalData.tipo === 'emitido' ? 7 : 6} className="text-end">
+                    Totales:
                   </td>
-                  <td className="text-end">
-                    {formatMoney(modalData.tareas.reduce((sum, t) => sum + t.costo, 0))}
+                  <td colSpan="2" className="text-end">
+                    <div>Costo: {formatMoney(modalData.tareas.reduce((sum, t) => sum + t.costo, 0))}</div>
+                    <div className="text-info">Venta: {formatMoney(modalData.tareas.reduce((sum, t) => sum + t.venta, 0))}</div>
                   </td>
                 </tr>
               </tfoot>
