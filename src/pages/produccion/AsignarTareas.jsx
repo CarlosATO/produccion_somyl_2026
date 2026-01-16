@@ -1782,8 +1782,8 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                                         <Card.Body className="p-2">
                                             {/* FILA 1: Actividad + EP Badge */}
                                             <div className="d-flex justify-content-between align-items-start gap-1 mb-1">
-                                                <span className="fw-semibold text-dark text-truncate" style={{flex: 1, lineHeight: 1.2}} title={task.actividad?.nombre || task.sub_actividad?.nombre}>
-                                                    {task.actividad?.nombre || task.sub_actividad?.nombre || 'Sin actividad'}
+                                                <span className="fw-semibold text-dark text-truncate" style={{flex: 1, lineHeight: 1.2}} title={task.items?.length > 1 ? 'Varias actividades' : (task.items?.length === 1 ? (task.items[0].actividad?.nombre || task.items[0].sub_actividad?.nombre) : (task.actividad?.nombre || task.sub_actividad?.nombre))}>
+                                                    {task.items?.length > 1 ? 'Varias actividades' : (task.items?.length === 1 ? (task.items[0].actividad?.nombre || task.items[0].sub_actividad?.nombre) : (task.actividad?.nombre || task.sub_actividad?.nombre || 'Sin actividad'))}
                                                 </span>
                                                 {task.estado_pago && <Badge bg="dark" className="flex-shrink-0" style={{fontSize: '0.65rem'}}>{task.estado_pago.codigo?.split('-').pop()}</Badge>}
                                             </div>
