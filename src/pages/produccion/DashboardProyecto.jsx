@@ -181,7 +181,7 @@ function DashboardProyecto() {
                 active={true}
               />
               <ModuleCard
-                title="Resumen Por Sub contrato"
+                title="Estado de resultado"
                 desc="Resumen financiero por proveedor."
                 icon="bi-people"
                 color="#8b5cf6"
