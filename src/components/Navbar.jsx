@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, matchPath } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Asegúrate de que esta ruta sea correcta
 import { proyectosService } from '../services/proyectosService'; // Importamos el servicio
-import { 
-  HardHat, 
-  LogOut, 
+import {
+  HardHat,
+  LogOut,
   Menu,
   X,
   Building2,
@@ -15,7 +15,7 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  
+
   // Estado para guardar la info del proyecto actual
   const [currentProject, setCurrentProject] = useState(null);
   const [avance, setAvance] = useState(0);
@@ -24,16 +24,16 @@ export default function Navbar() {
   useEffect(() => {
     // Verificamos si la URL coincide con el patrón de proyecto
     const match = matchPath("/proyecto/:projectId/*", location.pathname);
-    
+
     if (match && match.params.projectId) {
       const fetchProject = async () => {
         try {
           // Evitamos recargar si ya tenemos el mismo proyecto
           if (currentProject && currentProject.id === parseInt(match.params.projectId)) return;
-          
+
           const data = await proyectosService.getById(match.params.projectId);
           setCurrentProject(data);
-          
+
           // Cargar avance usando la función RPC
           const kpi = await proyectosService.getAvanceGlobal(match.params.projectId);
           if (kpi && kpi.porcentaje_avance !== undefined) {
@@ -52,13 +52,13 @@ export default function Navbar() {
   }, [location.pathname]);
 
   return (
-    <nav className="bg-slate-900 text-white shadow-lg sticky-top" style={{zIndex: 1030}}>
+    <nav className="bg-slate-900 text-white shadow-lg fixed top-0 w-full z-50 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          
+
           {/* SECCIÓN IZQUIERDA: LOGO O CONTEXTO DE PROYECTO */}
           <div className="flex items-center gap-4">
-            
+
             {/* Logo General (Siempre visible) */}
             <Link to="/" className="flex items-center gap-2 text-decoration-none text-white">
               <div className="bg-blue-600 p-2 rounded-lg">
@@ -94,6 +94,9 @@ export default function Navbar() {
 
           {/* PERFIL Y LOGOUT */}
           <div className="hidden md:flex items-center gap-4">
+
+
+
             <div className="text-right">
               <p className="text-sm font-medium text-white m-0">{user?.nombre || user?.full_name || 'Usuario'}</p>
               <p className="text-xs text-slate-400 m-0">{user?.email}</p>
@@ -124,21 +127,21 @@ export default function Navbar() {
         <div className="md:hidden bg-slate-800 border-t border-slate-700">
           <div className="px-4 pt-4 pb-2">
             {currentProject && (
-               <div className="mb-4 pb-4 border-b border-slate-700">
-                  <p className="text-xs text-slate-400 uppercase font-semibold mb-1">Proyecto Activo</p>
-                  <p className="text-white font-bold text-lg">{currentProject.proyecto}</p>
-                  <p className="text-slate-300 text-sm">Avance: {Number.isFinite(avance) ? avance.toFixed(1).replace('.', ',') : '0,0'}%</p>
-               </div>
+              <div className="mb-4 pb-4 border-b border-slate-700">
+                <p className="text-xs text-slate-400 uppercase font-semibold mb-1">Proyecto Activo</p>
+                <p className="text-white font-bold text-lg">{currentProject.proyecto}</p>
+                <p className="text-slate-300 text-sm">Avance: {Number.isFinite(avance) ? avance.toFixed(1).replace('.', ',') : '0,0'}%</p>
+              </div>
             )}
-            
+
             <div className="flex items-center gap-3 mb-3">
-               <div className="h-8 w-8 rounded-full bg-slate-600 flex items-center justify-center text-white font-bold">
-                  {user?.email?.charAt(0).toUpperCase()}
-               </div>
-               <div>
-                 <p className="text-white font-medium">{user?.full_name || 'Usuario'}</p>
-                 <p className="text-slate-400 text-xs">{user?.email}</p>
-               </div>
+              <div className="h-8 w-8 rounded-full bg-slate-600 flex items-center justify-center text-white font-bold">
+                {user?.email?.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-white font-medium">{user?.full_name || 'Usuario'}</p>
+                <p className="text-slate-400 text-xs">{user?.email}</p>
+              </div>
             </div>
 
             <button
