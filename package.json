@@ -1,0 +1,11 @@
+{
+    "name": "produccion_somyl_2026_root",
+    "private": true,
+    "engines": {
+        "node": "20.x"
+    },
+    "scripts": {
+        "build": "echo 'Root build skipped'",
+        "start": "echo 'Root start skipped'"
+    }
+}
