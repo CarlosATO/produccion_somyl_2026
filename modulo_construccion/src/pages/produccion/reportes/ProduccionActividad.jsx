@@ -67,8 +67,8 @@ const ProduccionActividad = () => {
       if (!actividadesMap[actId]) {
         actividadesMap[actId] = {
           actividad_id: actId,
-          nombre_actividad: cub.actividad?.nombre || 'Actividad',
-          unidad: cub.actividad?.unidad || 'UN',
+          nombre_actividad: cub.actividad?.nombre || cub.sub_actividad?.nombre || 'Actividad',
+          unidad: cub.actividad?.unidad || cub.sub_actividad?.unidad || 'UN',
           cantidad_cubicada: 0,
           cantidad_ejecutada: 0,
           costo_ejecutado: 0,
@@ -269,8 +269,7 @@ const ProduccionActividad = () => {
               {actividadesAgrupadas.length > 0 && (
                 <tfoot className="bg-light fw-bold">
                   <tr>
-                    <td className="ps-4 text-uppercase">Totales</td>
-                    <td colSpan="2"></td>
+                    <td className="ps-4 text-uppercase" colSpan="2">Totales</td>
                     <td className="text-end text-primary">{formatNumber(totales.cubicado)}</td>
                     <td className="text-end text-success">{formatNumber(totales.ejecutado)}</td>
                     <td className="text-end text-success">{formatMoney(totales.costo_ejecutado)}</td>
