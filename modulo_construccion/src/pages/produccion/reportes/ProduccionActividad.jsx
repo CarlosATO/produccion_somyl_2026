@@ -62,7 +62,8 @@ const ProduccionActividad = () => {
 
     // 1. CARGAR CUBICACIONES
     cubicaciones.forEach(cub => {
-      const actId = cub.actividad_id;
+      // FIX: Usar sub_actividad_id si existe, para que coincida con la lógica de ejecución
+      const actId = cub.sub_actividad_id || cub.actividad_id;
 
       if (!actividadesMap[actId]) {
         actividadesMap[actId] = {

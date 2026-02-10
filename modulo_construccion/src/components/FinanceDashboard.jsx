@@ -38,17 +38,53 @@ export default function FinanceDashboard({ projectId }) {
         try {
             setLoading(true);
 
-            // 1. Carga paralela de datos
-            const [dataSubcontrato, gastosOp] = await Promise.all([
-                reportesService.getResumenSubcontrato(projectId), // Trae venta y costo MO por proveedor
-                reportesService.getGastosOperativos(projectId)    // Trae total gastos materiales
+            // 1. Carga paralela de datos (Tareas para cálculo real, Gastos Op del backend, Estado Financiero Neto)
+            const [todasLasTareas, gastosOp, estadoFinanciero] = await Promise.all([
+                tareasService.getTareas(projectId),
+                reportesService.getGastosOperativos(projectId),    // Trae total gastos materiales
+                reportesService.getEstadoFinancieroProyecto(projectId) // Nuevo: Gasto Neto y Deuda
             ]);
 
-            // 2. Calcular Totales
-            const totalVenta = dataSubcontrato.reduce((acc, curr) => acc + (curr.produccion_venta || 0), 0);
-            const totalCostoMO = dataSubcontrato.reduce((acc, curr) => acc + (curr.produccion_costo || 0), 0);
-            const totalGastos = Number(gastosOp) || 0;
+            // 2. Procesar Tareas para obtener Costos y Ventas Reales
+            const proveedoresMap = {};
+            let totalCostoMO = 0;
+            let totalVenta = 0;
 
+            todasLasTareas.forEach(tarea => {
+                // Solo procesar si tiene ejecución real
+                if (tarea.cantidad_real > 0 || (tarea.items && tarea.items.some(i => i.cantidad_real > 0))) {
+                    const itemsProcesar = (tarea.items && tarea.items.length > 0) ? tarea.items : [tarea];
+
+                    itemsProcesar.forEach(item => {
+                        const cantReal = Number(item.cantidad_real) || 0;
+                        if (cantReal > 0) {
+                            const costo = cantReal * (Number(item.precio_costo_unitario) || 0);
+                            const venta = cantReal * (Number(item.precio_venta_unitario) || 0);
+
+                            // Acumular Globales
+                            totalCostoMO += costo;
+                            totalVenta += venta;
+
+                            // Acumular por Proveedor
+                            const provId = tarea.proveedor?.id || 'sin_prov';
+                            const provNombre = tarea.proveedor?.nombre || 'Proveedor Desconocido';
+
+                            if (!proveedoresMap[provId]) {
+                                proveedoresMap[provId] = {
+                                    nombre_proveedor: provNombre,
+                                    produccion_costo: 0,
+                                    produccion_venta: 0
+                                };
+                            }
+                            proveedoresMap[provId].produccion_costo += costo;
+                            proveedoresMap[provId].produccion_venta += venta;
+                        }
+                    });
+                }
+            });
+
+            // 3. Calcular Totales Finales
+            const totalGastos = Number(gastosOp) || 0;
             const utilidad = totalVenta - totalCostoMO - totalGastos;
             const margen = totalVenta > 0 ? (utilidad / totalVenta) * 100 : 0;
 
@@ -57,21 +93,24 @@ export default function FinanceDashboard({ projectId }) {
                 costos_mo: totalCostoMO,
                 gastos_op: totalGastos,
                 utilidad,
-                margen
+                margen,
+                gasto_realizado_neto: estadoFinanciero.total_gasto_neto,
+                deuda_pendiente_neto: estadoFinanciero.saldo_pendiente_neto
             });
 
-            // 3. Preparar Datos Gráfico Barras (Top 5 Proveedores por Costo)
-            const topProveedores = dataSubcontrato
+            // 4. Preparar Datos Gráfico Barras (Top 5 Proveedores por Costo)
+            const topProveedores = Object.values(proveedoresMap)
                 .sort((a, b) => b.produccion_costo - a.produccion_costo)
                 .slice(0, 5)
                 .map(p => ({
-                    name: p.nombre_proveedor.substring(0, 15) + '...', // Acortar nombre
+                    name: p.nombre_proveedor.length > 15 ? p.nombre_proveedor.substring(0, 15) + '...' : p.nombre_proveedor,
                     Costo: p.produccion_costo,
                     Venta: p.produccion_venta
                 }));
+
             setChartData(topProveedores);
 
-            // 4. Preparar Datos Gráfico Torta (Distribución de Gastos)
+            // 5. Preparar Datos Gráfico Torta (Distribución de Gastos)
             setPieData([
                 { name: 'Mano de Obra', value: totalCostoMO },
                 { name: 'Materiales/Gastos', value: totalGastos }
@@ -92,7 +131,7 @@ export default function FinanceDashboard({ projectId }) {
         <div className="p-3 bg-slate-50 min-h-full">
 
             {/* 1. KPIs ROW */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
 
                 {/* INGRESOS */}
                 <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
@@ -122,6 +161,26 @@ export default function FinanceDashboard({ projectId }) {
                     </div>
                     <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.gastos_op)}</div>
                     <div className="text-[10px] text-orange-400 mt-0.5">Materiales e Insumos</div>
+                </div>
+
+                {/* NUEVO: GASTO REALIZADO (NETO) */}
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"><Wallet size={18} /></div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Gasto Realizado (Neto)</span>
+                    </div>
+                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.gasto_realizado_neto || 0)}</div>
+                    <div className="text-[10px] text-purple-400 mt-0.5">Órdenes de Pago</div>
+                </div>
+
+                {/* NUEVO: DEUDA PENDIENTE (NETO) */}
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="p-1.5 bg-pink-50 text-pink-600 rounded-lg"><AlertCircle size={18} /></div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Deuda Pendiente (Neto)</span>
+                    </div>
+                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.deuda_pendiente_neto || 0)}</div>
+                    <div className="text-[10px] text-pink-400 mt-0.5">Por Pagar</div>
                 </div>
 
                 {/* UTILIDAD */}
