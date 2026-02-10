@@ -12,18 +12,18 @@ import { tareasService } from '../../../services/tareasService';
 const EstadosPagos = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  
+
   const [eps, setEps] = useState([]);
   const [tareas, setTareas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Filtros
   const [filterEstado, setFilterEstado] = useState('todos'); // 'todos', 'emitido', 'borrador'
   const [filterProveedor, setFilterProveedor] = useState(null);
   const [filterFechaDesde, setFilterFechaDesde] = useState('');
   const [filterFechaHasta, setFilterFechaHasta] = useState('');
-  
+
   // Modal para visualización
   const [showModal, setShowModal] = useState(false);
   const [epSeleccionado, setEpSeleccionado] = useState(null);
@@ -75,11 +75,11 @@ const EstadosPagos = () => {
 
   const handleVerDetalles = (ep) => {
     setEpSeleccionado(ep);
-    
+
     // Cargar tareas asociadas a este EP
     const tareasAsociadas = tareas.filter(t => t.estado_pago_id === ep.id);
     setTareasDelEp(tareasAsociadas);
-    
+
     setShowModal(true);
   };
 
@@ -106,13 +106,11 @@ const EstadosPagos = () => {
 
   return (
     <div className="container-fluid py-4 bg-light min-vh-100">
-      
+
       {/* ENCABEZADO */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <Button variant="outline-secondary" size="sm" onClick={() => navigate(`/proyecto/${projectId}`)} className="mb-2 border-0 ps-0">
-            <i className="bi bi-arrow-left me-2"></i>Volver al Dashboard
-          </Button>
+
           <h4 className="fw-bold text-dark mb-0">Estados de Pago</h4>
           <small className="text-muted">Gestión y control de emisiones</small>
         </div>
@@ -131,8 +129,8 @@ const EstadosPagos = () => {
           <Row className="g-3">
             <Col md={3}>
               <Form.Label className="small fw-bold text-muted mb-1">Estado</Form.Label>
-              <Form.Select 
-                value={filterEstado} 
+              <Form.Select
+                value={filterEstado}
                 onChange={(e) => setFilterEstado(e.target.value)}
                 size="sm"
               >
@@ -144,7 +142,7 @@ const EstadosPagos = () => {
             </Col>
             <Col md={3}>
               <Form.Label className="small fw-bold text-muted mb-1">Proveedor</Form.Label>
-              <Select 
+              <Select
                 isClearable
                 options={proveedoresOpts}
                 value={filterProveedor}
@@ -157,7 +155,7 @@ const EstadosPagos = () => {
             </Col>
             <Col md={2}>
               <Form.Label className="small fw-bold text-muted mb-1">Desde</Form.Label>
-              <Form.Control 
+              <Form.Control
                 type="date"
                 value={filterFechaDesde}
                 onChange={(e) => setFilterFechaDesde(e.target.value)}
@@ -166,7 +164,7 @@ const EstadosPagos = () => {
             </Col>
             <Col md={2}>
               <Form.Label className="small fw-bold text-muted mb-1">Hasta</Form.Label>
-              <Form.Control 
+              <Form.Control
                 type="date"
                 value={filterFechaHasta}
                 onChange={(e) => setFilterFechaHasta(e.target.value)}
@@ -174,8 +172,8 @@ const EstadosPagos = () => {
               />
             </Col>
             <Col md={2} className="d-flex align-items-end">
-              <Button 
-                variant="outline-secondary" 
+              <Button
+                variant="outline-secondary"
                 size="sm"
                 onClick={() => {
                   setFilterEstado('todos');
@@ -204,13 +202,13 @@ const EstadosPagos = () => {
             <Table hover responsive className="mb-0 align-middle small">
               <thead className="bg-light text-secondary text-uppercase">
                 <tr>
-                  <th className="py-3 ps-4 border-0" style={{fontSize: '0.75rem'}}>Código</th>
-                  <th className="py-3 border-0" style={{fontSize: '0.75rem'}}>Proveedor</th>
-                  <th className="py-3 text-center border-0" style={{fontSize: '0.75rem'}}>Estado</th>
-                  <th className="py-3 border-0" style={{fontSize: '0.75rem'}}>Fecha Emisión</th>
-                  <th className="py-3 border-0" style={{fontSize: '0.75rem'}}>Tareas</th>
-                  <th className="py-3 text-end border-0" style={{fontSize: '0.75rem'}}>Monto</th>
-                  <th className="py-3 text-center pe-4 border-0" style={{fontSize: '0.75rem'}}>Acciones</th>
+                  <th className="py-3 ps-4 border-0" style={{ fontSize: '0.75rem' }}>Código</th>
+                  <th className="py-3 border-0" style={{ fontSize: '0.75rem' }}>Proveedor</th>
+                  <th className="py-3 text-center border-0" style={{ fontSize: '0.75rem' }}>Estado</th>
+                  <th className="py-3 border-0" style={{ fontSize: '0.75rem' }}>Fecha Emisión</th>
+                  <th className="py-3 border-0" style={{ fontSize: '0.75rem' }}>Tareas</th>
+                  <th className="py-3 text-end border-0" style={{ fontSize: '0.75rem' }}>Monto</th>
+                  <th className="py-3 text-center pe-4 border-0" style={{ fontSize: '0.75rem' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -246,8 +244,8 @@ const EstadosPagos = () => {
                       )}
                     </td>
                     <td className="text-center pe-4">
-                      <Button 
-                        variant="outline-primary" 
+                      <Button
+                        variant="outline-primary"
                         size="sm"
                         onClick={() => handleVerDetalles(ep)}
                         className="me-1"
@@ -260,8 +258,8 @@ const EstadosPagos = () => {
                           fileName={`${ep.codigo}.pdf`}
                         >
                           {({ loading: pdfLoading }) => (
-                            <Button 
-                              variant="outline-success" 
+                            <Button
+                              variant="outline-success"
                               size="sm"
                               disabled={pdfLoading}
                             >
@@ -330,28 +328,28 @@ const EstadosPagos = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {tareasDelEp.flatMap(t => 
-                      (t.items && t.items.length > 0) 
+                    {tareasDelEp.flatMap(t =>
+                      (t.items && t.items.length > 0)
                         ? t.items.map((item, idx) => (
-                            <tr key={`${t.id}-${idx}`}>
-                              <td>{item.actividad?.nombre || item.sub_actividad?.nombre}</td>
-                              <td className="text-center"><Badge bg="light" text="dark">{t.zona?.nombre}</Badge></td>
-                              <td className="text-center">{item.cantidad_real || item.cantidad_asignada}</td>
-                              <td className="text-end fw-semibold">
-                                {formatMoney((item.cantidad_real || item.cantidad_asignada || 0) * (item.precio_costo_unitario || 0))}
-                              </td>
-                            </tr>
-                          ))
+                          <tr key={`${t.id}-${idx}`}>
+                            <td>{item.actividad?.nombre || item.sub_actividad?.nombre}</td>
+                            <td className="text-center"><Badge bg="light" text="dark">{t.zona?.nombre}</Badge></td>
+                            <td className="text-center">{item.cantidad_real || item.cantidad_asignada}</td>
+                            <td className="text-end fw-semibold">
+                              {formatMoney((item.cantidad_real || item.cantidad_asignada || 0) * (item.precio_costo_unitario || 0))}
+                            </td>
+                          </tr>
+                        ))
                         : (
-                            <tr>
-                              <td>{t.actividad?.nombre || t.sub_actividad?.nombre}</td>
-                              <td className="text-center"><Badge bg="light" text="dark">{t.zona?.nombre}</Badge></td>
-                              <td className="text-center">{t.cantidad_real || t.cantidad_asignada}</td>
-                              <td className="text-end fw-semibold">
-                                {formatMoney((t.cantidad_real || 0) * (t.precio_costo_unitario || 0))}
-                              </td>
-                            </tr>
-                          )
+                          <tr>
+                            <td>{t.actividad?.nombre || t.sub_actividad?.nombre}</td>
+                            <td className="text-center"><Badge bg="light" text="dark">{t.zona?.nombre}</Badge></td>
+                            <td className="text-center">{t.cantidad_real || t.cantidad_asignada}</td>
+                            <td className="text-end fw-semibold">
+                              {formatMoney((t.cantidad_real || 0) * (t.precio_costo_unitario || 0))}
+                            </td>
+                          </tr>
+                        )
                     )}
                   </tbody>
                   <tfoot className="fw-bold bg-light">
@@ -381,8 +379,8 @@ const EstadosPagos = () => {
                     fileName={`${epSeleccionado.codigo}.pdf`}
                   >
                     {({ loading: pdfLoading }) => (
-                      <Button 
-                        variant="success" 
+                      <Button
+                        variant="success"
                         size="sm"
                         disabled={pdfLoading}
                       >

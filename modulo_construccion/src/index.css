@@ -2,9 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
+
+/* ============================================
+   HIGH DENSITY UI - Global Overrides
+   ============================================ */
+
+:root {
+  font-size: 14px;
+  /* Base font size reduction */
+}
+
+body {
+  @apply text-slate-800 antialiased;
+  font-size: 0.875rem;
+  /* 14px equivalent */
+}
+
+/* Compact Tables */
+.table {
+  @apply mb-0;
+}
+
+.table> :not(caption)>*>* {
+  padding: 0.4rem 0.5rem !important;
+  /* Significant reduction */
+}
+
+/* Compact Cards */
+.card-body {
+  padding: 0.75rem !important;
+}
+
+.card-header {
+  padding: 0.5rem 0.75rem !important;
+}
+
+/* Compact Forms */
+.form-control,
+.form-select {
+  padding: 0.35rem 0.6rem !important;
+  font-size: 0.85rem !important;
+  min-height: auto !important;
+}
+
+.form-label {
+  margin-bottom: 0.2rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: #64748b;
+}
+
+/* Compact Buttons */
+.btn {
+  padding: 0.3rem 0.75rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+}
+
+.btn-sm {
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+
+/* Layout Utilities */
+.container-fluid {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+.gap-responsive {
+  @apply gap-2;
+}
+
 /* ============================================
    MODAL PROFESIONAL - Estilos personalizados
    ============================================ */
@@ -22,7 +98,7 @@ html, body, #root {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
   pointer-events: none;
 }
 

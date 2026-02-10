@@ -2,8 +2,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
-import Dashboard from './pages/Dashboard'; // Este es el selector general de proyectos
-import DashboardProyecto from './pages/produccion/DashboardProyecto'; // <--- EL NUEVO DASHBOARD
+import Dashboard from './pages/Dashboard';
+import DashboardProyecto from './pages/produccion/DashboardProyecto';
 import GestionCuadrillas from './pages/produccion/GestionCuadrillas';
 import GestionActividades from './pages/produccion/GestionActividades';
 import AsignarTareas from './pages/produccion/AsignarTareas';
@@ -13,6 +13,7 @@ import GestionDescuentos from './pages/produccion/GestionDescuentos';
 import ResumenSubcontrato from './pages/produccion/reportes/ResumenSubcontrato';
 import ProduccionActividad from './pages/produccion/reportes/ProduccionActividad';
 import EstadosPagos from './pages/produccion/reportes/EstadosPagos';
+import ProjectLayout from './layouts/ProjectLayout';
 
 // --- Placeholder Components ---
 const Reportes = () => <div className="p-5"><h1>Reportes</h1></div>;
@@ -38,58 +39,31 @@ function ProtectedLayout() {
   return (
     <div className="min-vh-100 bg-light">
       <Navbar />
-      <main className="pt-16">
+      <main className="pt-14">
         <Routes>
           {/* 1. SELECCIÓN DE PROYECTO (Home) */}
           <Route path="/" element={<Dashboard />} />
 
-          {/* 2. DASHBOARD ESPECÍFICO DEL PROYECTO (Centro de Mando) */}
-          <Route
-            path="/proyecto/:projectId"
-            element={<DashboardProyecto />}
-          />
+          {/* 2. RUTAS DE PROYECTO CON LAYOUT GLOBAL (RIBBON) */}
+          <Route path="/proyecto/:projectId" element={<ProjectLayout />}>
+            {/* Dashboard del Proyecto (Financial View) */}
+            <Route index element={<DashboardProyecto />} />
 
-          {/* 3. MÓDULOS DEL PROYECTO */}
-          <Route
-            path="/proyecto/:projectId/cuadrillas"
-            element={<GestionCuadrillas />}
-          />
-          <Route
-            path="/proyecto/:projectId/actividades"
-            element={<GestionActividades />}
-          />
-          <Route
-            path="/proyecto/:projectId/tareas"
-            element={<AsignarTareas />}
-          />
-          <Route
-            path="/proyecto/:projectId/zonas"
-            element={<GestionZonas />}
-          />
-          <Route
-            path="/proyecto/:projectId/gastos/cuadrillas"
-            element={<GestionDescuentos />}
-          />
-          <Route
-            path="/proyecto/:projectId/cubicaciones"
-            element={<Cubicacion />}
-          />
-          {/* REPORTES */}
-          <Route
-            path="/proyecto/:projectId/reportes/resumen-subcontrato"
-            element={<ResumenSubcontrato />}
-          />
-          <Route
-            path="/proyecto/:projectId/reportes/produccion-actividad"
-            element={<ProduccionActividad />}
-          />
-          <Route
-            path="/proyecto/:projectId/reportes/estado-pagos"
-            element={<EstadosPagos />}
-          />
-          {/* Aquí agregaremos Zonas, Reportes, Avance... */}
+            {/* Módulos */}
+            <Route path="cuadrillas" element={<GestionCuadrillas />} />
+            <Route path="actividades" element={<GestionActividades />} />
+            <Route path="tareas" element={<AsignarTareas />} />
+            <Route path="zonas" element={<GestionZonas />} />
+            <Route path="gastos/cuadrillas" element={<GestionDescuentos />} />
+            <Route path="cubicaciones" element={<Cubicacion />} />
 
-          {/* 4. RUTAS GLOBALES */}
+            {/* Reportes */}
+            <Route path="reportes/resumen-subcontrato" element={<ResumenSubcontrato />} />
+            <Route path="reportes/produccion-actividad" element={<ProduccionActividad />} />
+            <Route path="reportes/estado-pagos" element={<EstadosPagos />} />
+          </Route>
+
+          {/* 3. RUTAS GLOBALES */}
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/maestros" element={<Maestros />} />
           <Route path="/configuracion" element={<Configuracion />} />

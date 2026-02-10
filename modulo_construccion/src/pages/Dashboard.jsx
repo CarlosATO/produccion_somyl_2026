@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { proyectosService } from '../services/proyectosService';
@@ -8,23 +8,30 @@ import {
   ArrowRight,
   Loader2,
   Search,
-  LayoutList,
-  Calendar,
-  Briefcase
+  LayoutGrid,
+  List,
+  Briefcase,
+  TrendingUp,
+  AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Badge } from 'react-bootstrap';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   const [proyectos, setProyectos] = useState([]);
-  const [misAccesos, setMisAccesos] = useState([]);
+  const [misAccesos, setMisAccesos] = useState([]); // eslint-disable-line no-unused-vars
+  const [avances, setAvances] = useState({}); // Cache de avances { id: { porcentaje_avance: 0, ... } }
   const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState("");
 
-  // Lógica de Administrador (Temporal)
-  const isAdmin = true;
+  // UI State
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState('todos'); // 'todos' | 'activos' | 'inactivos'
+
+  const isAdmin = true; // Temporal, lógica real pendiente
 
   useEffect(() => {
     cargarDatos();
@@ -39,11 +46,29 @@ export default function Dashboard() {
         const accesos = await proyectosService.getMisAccesos(user.id);
         setMisAccesos(accesos);
       }
+
+      // Cargar avances en background (Lazy Loading)
+      cargarAvancesBackground(dataProyectos);
+
     } catch (error) {
       console.error(error);
       toast.error('Error cargando proyectos.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarAvancesBackground = async (listaProyectos) => {
+    // Cargar uno por uno para no saturar, priorizando los activos
+    for (const p of listaProyectos) {
+      if (p.activo !== false) {
+        try {
+          const kpi = await proyectosService.getAvanceGlobal(p.id);
+          setAvances(prev => ({ ...prev, [p.id]: kpi }));
+        } catch (e) {
+          console.warn(`No se pudo cargar avance para ${p.id}`);
+        }
+      }
     }
   };
 
@@ -53,164 +78,270 @@ export default function Dashboard() {
     toast.success(`Ingresando a: ${proyecto.proyecto}`);
   };
 
-  // Filtrado en tiempo real
-  const proyectosFiltrados = proyectos.filter(p => {
-    // 1. Filtro de Estado ACTIVO (Base de datos)
-    // Si el campo 'activo' viene null, asumimos true por defecto (según schema)
-    const isActivo = p.activo !== false;
-    if (!isActivo) return false;
+  // KPI CALCULATIONS
+  const stats = useMemo(() => {
+    const total = proyectos.length;
+    const activos = proyectos.filter(p => p.activo !== false).length;
+    // Críticos: Activos con menos del 10% avance pero iniciado (>0)
+    const criticos = proyectos.filter(p => {
+      const pAvance = avances[p.id]?.porcentaje_avance || 0;
+      return p.activo !== false && pAvance < 10 && pAvance > 0;
+    }).length;
+    return { total, activos, criticos };
+  }, [proyectos, avances]);
 
-    // 2. Filtro de Búsqueda de Texto
-    const texto = busqueda.toLowerCase();
-    return (
-      p.proyecto.toLowerCase().includes(texto) ||
-      (p.cliente && p.cliente.toLowerCase().includes(texto)) ||
-      String(p.id).includes(texto)
-    );
-  });
+  // FILTERING
+  const proyectosFiltrados = useMemo(() => {
+    return proyectos.filter(p => {
+      const isActive = p.activo !== false;
+
+      // 1. Filtro Estado
+      if (filtroEstado === 'activos' && !isActive) return false;
+      if (filtroEstado === 'inactivos' && isActive) return false;
+
+      // 2. Búsqueda
+      const texto = busqueda.toLowerCase();
+      return (
+        p.proyecto?.toLowerCase().includes(texto) ||
+        (p.cliente && p.cliente.toLowerCase().includes(texto)) ||
+        String(p.id).includes(texto)
+      );
+    });
+  }, [proyectos, busqueda, filtroEstado]);
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh] bg-slate-50 gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        <p className="text-slate-500 font-medium animate-pulse">Cargando tus proyectos...</p>
+        <p className="text-slate-500 font-medium animate-pulse">Cargando portafolio...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
+    <div className="min-h-screen bg-slate-50 pb-20 font-inter">
 
-      {/* 1. HEADER HERO */}
-      <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 text-white pb-24 pt-24 px-6 md:px-10 shadow-lg relative overflow-hidden">
-        {/* Decoración de fondo */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full -ml-10 -mb-10 blur-xl pointer-events-none"></div>
-
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      {/* 1. HERO HEADER KPI */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
-                  <LayoutList className="w-6 h-6 text-white" />
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight">Panel de Proyectos</h1>
-              </div>
-              <p className="text-blue-100 text-lg font-light">
-                Bienvenido, <span className="font-semibold">{user.full_name}</span>.
-              </p>
+              <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Panel de Control</h1>
+              <p className="text-slate-500 text-sm">Bienvenido de nuevo, <span className="font-semibold text-slate-700">{user.full_name}</span>.</p>
             </div>
 
-            {/* Buscador Flotante STICKY */}
-            <div className="w-full md:w-96 sticky top-20 z-40">
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-slate-500 group-focus-within:text-blue-600 transition-colors" />
+            {/* KPI CARDS MINI */}
+            <div className="flex gap-4">
+              <div className="px-4 py-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-full text-blue-600"><Building2 size={18} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-blue-700 leading-none">{stats.activos}</div>
+                  <div className="text-[10px] uppercase font-bold text-blue-400 tracking-wider">Activos</div>
                 </div>
-                <input
-                  type="text"
-                  className="block w-full pl-10 pr-4 py-3 border-0 rounded-xl leading-5 bg-white text-slate-900 placeholder-slate-500 shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300 ease-out font-medium"
-                  placeholder="Buscar obra, cliente o ID..."
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                />
+              </div>
+              <div className="px-4 py-2 bg-green-50 border border-green-100 rounded-lg flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-full text-green-600"><TrendingUp size={18} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-green-700 leading-none">{stats.total}</div>
+                  <div className="text-[10px] uppercase font-bold text-green-400 tracking-wider">Total</div>
+                </div>
+              </div>
+              <div className="px-4 py-2 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-full text-orange-600"><AlertCircle size={18} /></div>
+                <div>
+                  <div className="text-2xl font-bold text-orange-700 leading-none">{stats.criticos}</div>
+                  <div className="text-[10px] uppercase font-bold text-orange-400 tracking-wider">Críticos</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. GRID DE PROYECTOS */}
-      <div className="max-w-7xl mx-auto px-6 md:px-10 -mt-16 relative z-20">
+      <div className="max-w-7xl mx-auto px-6 py-8">
 
+        {/* 2. TOOLBAR */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+          {/* Buscador */}
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-4 w-4" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, cliente o ID..."
+              className="w-full pl-10 pr-4 py-2 text-sm border-0 focus:ring-0 text-slate-700 placeholder-slate-400 outline-none"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 px-2 border-l border-slate-100 pl-4">
+            {/* Filtro Estado */}
+            <select
+              className="text-sm border-slate-200 rounded-lg focus:ring-blue-500 focus:border-blue-500 py-1.5 pl-2 pr-8 outline-none"
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+            >
+              <option value="todos">Todos los Estados</option>
+              <option value="activos">Sólo Activos</option>
+              <option value="inactivos">Inactivos / Finalizados</option>
+            </select>
+
+            {/* View Toggles */}
+            <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <List size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. CONTENT AREA */}
         {proyectosFiltrados.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
-            <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
+            <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
               <Search className="h-8 w-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-700">No se encontraron proyectos</h3>
-            <p className="text-slate-500 mt-2">Intenta ajustar tu búsqueda o verifica los filtros.</p>
+            <h3 className="text-slate-600 font-medium">No se encontraron proyectos</h3>
+            <p className="text-slate-400 text-sm">Prueba ajustando los filtros de búsqueda</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {proyectosFiltrados.map((proyecto) => {
-              const tieneAcceso = isAdmin || misAccesos.includes(proyecto.id);
-              const estadoTexto = proyecto.estado_proyecto || (proyecto.activo ? 'En Ejecución' : 'Inactivo');
+          viewMode === 'grid' ? (
+            // --- GRID VIEW ---
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {proyectosFiltrados.map(proyecto => {
+                const tieneAcceso = isAdmin;
+                const isActivo = proyecto.activo !== false;
+                const avance = avances[proyecto.id];
 
-              return (
-                <div
-                  key={proyecto.id}
-                  onClick={() => tieneAcceso && handleIngresar(proyecto)}
-                  className={`group relative bg-white rounded-2xl overflow-hidden border transition-all duration-300 ${tieneAcceso
-                    ? 'hover:-translate-y-1 hover:shadow-xl border-slate-200 cursor-pointer'
-                    : 'opacity-70 grayscale border-slate-100 cursor-not-allowed'
-                    }`}
-                >
-                  {/* Banda Superior de Estado */}
-                  <div className={`h-1.5 w-full ${tieneAcceso ? 'bg-gradient-to-r from-blue-500 to-indigo-600' : 'bg-slate-300'}`}></div>
-
-                  <div className="p-6">
-                    {/* Header Card */}
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`p-3 rounded-xl ${tieneAcceso ? 'bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors' : 'bg-slate-100 text-slate-400'}`}>
-                        <Building2 className="w-6 h-6" />
+                return (
+                  <div
+                    key={proyecto.id}
+                    onClick={() => tieneAcceso && handleIngresar(proyecto)}
+                    className={`group bg-white rounded-xl border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 relative overflow-hidden flex flex-col ${!tieneAcceso ? 'opacity-60 grayscale' : 'cursor-pointer'}`}
+                  >
+                    <div className="p-5 flex-1">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isActivo ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
+                            <Building2 size={20} />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-slate-800 leading-tight group-hover:text-blue-600 transition-colors line-clamp-1">{proyecto.proyecto}</h3>
+                            <div className="text-xs text-slate-500 font-medium uppercase tracking-wide flex items-center gap-1 mt-0.5">
+                              <Briefcase size={10} />
+                              {proyecto.cliente || 'Sin Cliente'}
+                            </div>
+                          </div>
+                        </div>
+                        <Badge bg={isActivo ? 'success' : 'secondary'} className="text-[10px] px-2 py-0.5 font-bold">
+                          {isActivo ? 'ACTIVO' : 'INACTIVO'}
+                        </Badge>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                          #{proyecto.id}
-                        </span>
+
+                      {/* Progress Section */}
+                      <div className="mb-4">
+                        <div className="flex justify-between text-xs mb-1.5">
+                          <span className="text-slate-500 font-medium">Avance Financiero</span>
+                          <span className="text-slate-800 font-bold">{avance ? `${avance.porcentaje_avance}%` : '-'}</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                          {avance ? (
+                            <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${avance.porcentaje_avance}%` }}></div>
+                          ) : (
+                            <div className={`h-full bg-slate-200 rounded-full ${isActivo ? 'animate-pulse w-1/3' : 'w-full'}`}></div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-slate-400 line-clamp-2 min-h-[2.5em]">
+                        {proyecto.observacion || 'Sin observaciones registradas para este proyecto.'}
                       </div>
                     </div>
 
-                    {/* Título y Cliente */}
-                    <div className="mb-4">
-                      <h3 className={`text-lg font-bold leading-tight mb-1 line-clamp-2 ${tieneAcceso ? 'text-slate-800 group-hover:text-blue-700' : 'text-slate-500'}`}>
-                        {proyecto.proyecto}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Briefcase className="w-3 h-3 text-slate-400" />
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          {proyecto.cliente || 'Sin Cliente'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Observación / Info Extra */}
-                    <div className="min-h-[2.5rem]">
-                      <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">
-                        {proyecto.observacion || 'Sin observaciones registradas.'}
-                      </p>
+                    <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                      <span className="text-xs font-mono text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">ID: {proyecto.id}</span>
+                      {tieneAcceso ? (
+                        <div className="flex items-center gap-1 text-blue-600 text-xs font-bold group-hover:translate-x-1 transition-transform">
+                          INGRESAR <ArrowRight size={14} />
+                        </div>
+                      ) : <Lock size={14} className="text-slate-400" />}
                     </div>
                   </div>
+                )
+              })}
+            </div>
+          ) : (
+            // --- LIST VIEW ---
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-4 w-20">ID</th>
+                    <th className="px-6 py-4">Proyecto</th>
+                    <th className="px-6 py-4">Cliente</th>
+                    <th className="px-6 py-4 text-center">Estado</th>
+                    <th className="px-6 py-4 w-48">Avance</th>
+                    <th className="px-6 py-4 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {proyectosFiltrados.map(proyecto => {
+                    const tieneAcceso = isAdmin;
+                    const isActivo = proyecto.activo !== false;
+                    const avance = avances[proyecto.id];
 
-                  {/* Footer Card */}
-                  <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between group-hover:bg-blue-50/30 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${tieneAcceso ? 'bg-green-500' : 'bg-slate-400'} animate-pulse`}></span>
-                      <span className={`text-xs font-medium ${tieneAcceso ? 'text-green-700' : 'text-slate-500'}`}>
-                        {tieneAcceso ? estadoTexto : 'Acceso Restringido'}
-                      </span>
-                    </div>
-
-                    {tieneAcceso ? (
-                      <button className="text-blue-600 bg-white p-2 rounded-full shadow-sm border border-slate-100 group-hover:bg-blue-600 group-hover:text-white group-hover:shadow-md transition-all">
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    ) : (
-                      <Lock className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                    return (
+                      <tr key={proyecto.id} className="hover:bg-slate-50 transition-colors group">
+                        <td className="px-6 py-4 font-mono text-slate-400 text-xs">#{proyecto.id}</td>
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-800">{proyecto.proyecto}</div>
+                          <div className="text-xs text-slate-400 mt-0.5 line-clamp-1 max-w-[200px]">{proyecto.observacion}</div>
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">{proyecto.cliente}</td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${isActivo ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isActivo ? 'bg-green-500' : 'bg-slate-400'}`}></span>
+                            {isActivo ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              {avance ? (
+                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${avance.porcentaje_avance}%` }}></div>
+                              ) : (
+                                <div className={`h-full bg-slate-200 rounded-full ${isActivo ? 'animate-pulse w-1/3' : 'w-full'}`}></div>
+                              )}
+                            </div>
+                            <span className="text-xs font-bold text-slate-600 w-8 text-right">{avance ? `${avance.porcentaje_avance}%` : '-'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            onClick={() => tieneAcceso && handleIngresar(proyecto)}
+                            disabled={!tieneAcceso}
+                            className={`p-2 rounded-lg border transition-all ${tieneAcceso ? 'bg-white border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-200' : 'bg-slate-50 text-slate-300 border-transparent cursor-not-allowed'}`}
+                          >
+                            <ArrowRight size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
-
-        <div className="mt-8 text-center">
-          <p className="text-xs text-slate-400">
-            Mostrando {proyectosFiltrados.length} proyecto(s) activo(s)
-          </p>
-        </div>
       </div>
     </div>
   );

@@ -9,13 +9,13 @@ import { cubicacionService } from '../../../services/cubicacionService';
 const ProduccionActividad = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  
+
   const [tareas, setTareas] = useState([]);
   const [cubicaciones, setCubicaciones] = useState([]);
   const [actividadesAgrupadas, setActividadesAgrupadas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Modal
   const [showModal, setShowModal] = useState(false);
   const [actividadSeleccionada, setActividadSeleccionada] = useState(null);
@@ -38,13 +38,13 @@ const ProduccionActividad = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Cargar tareas y cubicaciones en paralelo
       const [tareasData, cubicacionesData] = await Promise.all([
         tareasService.getTareas(projectId),
         cubicacionService.getCubicaciones(projectId)
       ]);
-      
+
       setTareas(tareasData || []);
       setCubicaciones(cubicacionesData || []);
 
@@ -59,11 +59,11 @@ const ProduccionActividad = () => {
   // Procesar datos: CONTRASTE CUBICACIÓN vs EJECUCIÓN
   const procesarActividadesComparadas = () => {
     const actividadesMap = {};
-    
+
     // 1. CARGAR CUBICACIONES
     cubicaciones.forEach(cub => {
       const actId = cub.actividad_id;
-      
+
       if (!actividadesMap[actId]) {
         actividadesMap[actId] = {
           actividad_id: actId,
@@ -77,16 +77,16 @@ const ProduccionActividad = () => {
       }
       actividadesMap[actId].cantidad_cubicada += Number(cub.cantidad) || 0;
     });
-    
+
     // 2. CARGAR EJECUCIONES (cantidad_real > 0)
     tareas.forEach(tarea => {
       if (tarea.items && tarea.items.length > 0) {
         tarea.items.forEach(item => {
           const cantReal = Number(item.cantidad_real) || 0;
-          
+
           if (cantReal > 0) {
             const actId = item.actividad_id || item.sub_actividad_id;
-            
+
             if (!actividadesMap[actId]) {
               actividadesMap[actId] = {
                 actividad_id: actId,
@@ -98,9 +98,9 @@ const ProduccionActividad = () => {
                 tareas_realizadas: []
               };
             }
-            
+
             const costo = cantReal * (item.precio_costo_unitario || 0);
-            
+
             actividadesMap[actId].cantidad_ejecutada += cantReal;
             actividadesMap[actId].costo_ejecutado += costo;
             actividadesMap[actId].tareas_realizadas.push({
@@ -157,18 +157,16 @@ const ProduccionActividad = () => {
 
   return (
     <div className="container-fluid py-4 bg-light min-vh-100">
-      
+
       {/* HEADER */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <Button variant="outline-secondary" size="sm" onClick={() => navigate(`/proyecto/${projectId}`)} className="mb-2 border-0 ps-0">
-            <i className="bi bi-arrow-left me-2"></i>Volver al Dashboard
-          </Button>
+
           <h4 className="fw-bold text-dark mb-0">Producción por Actividad</h4>
           <small className="text-muted">Detalle de todas las actividades ejecutadas (emitidas y sin emitir)</small>
         </div>
         <Button variant="outline-success" size="sm" onClick={() => window.print()}>
-            <i className="bi bi-printer me-2"></i>Imprimir
+          <i className="bi bi-printer me-2"></i>Imprimir
         </Button>
       </div>
 
@@ -196,7 +194,7 @@ const ProduccionActividad = () => {
           <Row>
             <Col md={12}>
               <small className="text-muted fw-bold">% Avance Global</small>
-              <ProgressBar 
+              <ProgressBar
                 now={totales.cubicado > 0 ? (totales.ejecutado / totales.cubicado * 100) : 0}
                 label={`${Math.round(totales.cubicado > 0 ? (totales.ejecutado / totales.cubicado * 100) : 0)}%`}
                 className="mt-2"
@@ -209,7 +207,7 @@ const ProduccionActividad = () => {
       {/* TABLA */}
       <Card className="border-0 shadow-sm">
         <Card.Header className="bg-white py-3">
-            <h6 className="mb-0 fw-bold">Contraste Cubicación vs Ejecución ({actividadesAgrupadas.length} actividades)</h6>
+          <h6 className="mb-0 fw-bold">Contraste Cubicación vs Ejecución ({actividadesAgrupadas.length} actividades)</h6>
         </Card.Header>
         <Card.Body className="p-0">
           {actividadesAgrupadas.length === 0 ? (
@@ -224,16 +222,16 @@ const ProduccionActividad = () => {
                   <th className="py-3 text-end text-success fw-bold">Cant. Ejecutada</th>
                   <th className="py-3 text-end">Total Costo</th>
                   <th className="py-3 text-center">% Avance</th>
-                  <th className="py-3 text-center" style={{width: '80px'}}>Tareas</th>
+                  <th className="py-3 text-center" style={{ width: '80px' }}>Tareas</th>
                   <th className="py-3 text-center pe-4">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {actividadesAgrupadas.map((actividad) => {
-                  const porcentajeAvance = actividad.cantidad_cubicada > 0 
+                  const porcentajeAvance = actividad.cantidad_cubicada > 0
                     ? Math.round((actividad.cantidad_ejecutada / actividad.cantidad_cubicada) * 100)
                     : (actividad.cantidad_ejecutada > 0 ? 100 : 0);
-                    
+
                   return (
                     <tr key={actividad.actividad_id}>
                       <td className="ps-4 fw-medium text-dark">{actividad.nombre_actividad}</td>
@@ -243,10 +241,10 @@ const ProduccionActividad = () => {
                       <td className="text-end fw-bold text-success">{formatMoney(actividad.costo_ejecutado)}</td>
                       <td className="text-center">
                         <div className="d-flex align-items-center gap-2">
-                          <ProgressBar 
+                          <ProgressBar
                             now={porcentajeAvance}
                             className="flex-grow-1"
-                            style={{height: '20px'}}
+                            style={{ height: '20px' }}
                           />
                           <span className="fw-bold small text-nowrap">{porcentajeAvance}%</span>
                         </div>
@@ -255,8 +253,8 @@ const ProduccionActividad = () => {
                         <Badge bg="light" text="dark" className="border">{actividad.tareas_realizadas.length}</Badge>
                       </td>
                       <td className="text-center pe-4">
-                        <Button 
-                          variant="outline-primary" 
+                        <Button
+                          variant="outline-primary"
                           size="sm"
                           onClick={() => handleVerDetalles(actividad)}
                         >
@@ -267,18 +265,18 @@ const ProduccionActividad = () => {
                   )
                 })}
               </tbody>
-              
+
               {actividadesAgrupadas.length > 0 && (
-                  <tfoot className="bg-light fw-bold">
-                      <tr>
-                          <td className="ps-4 text-uppercase">Totales</td>
-                          <td colSpan="2"></td>
-                          <td className="text-end text-primary">{formatNumber(totales.cubicado)}</td>
-                          <td className="text-end text-success">{formatNumber(totales.ejecutado)}</td>
-                          <td className="text-end text-success">{formatMoney(totales.costo_ejecutado)}</td>
-                          <td colSpan="3"></td>
-                      </tr>
-                  </tfoot>
+                <tfoot className="bg-light fw-bold">
+                  <tr>
+                    <td className="ps-4 text-uppercase">Totales</td>
+                    <td colSpan="2"></td>
+                    <td className="text-end text-primary">{formatNumber(totales.cubicado)}</td>
+                    <td className="text-end text-success">{formatNumber(totales.ejecutado)}</td>
+                    <td className="text-end text-success">{formatMoney(totales.costo_ejecutado)}</td>
+                    <td colSpan="3"></td>
+                  </tr>
+                </tfoot>
               )}
             </Table>
           )}
@@ -324,8 +322,8 @@ const ProduccionActividad = () => {
                     <td className="text-center small">{formatFecha(tarea.fecha_asignacion)}</td>
                     <td className="text-center small">{formatFecha(tarea.fecha_termino)}</td>
                     <td className="text-center">
-                      <Badge 
-                        bg={tarea.estado_ep === 'EMITIDO' ? 'success' : 'warning'} 
+                      <Badge
+                        bg={tarea.estado_ep === 'EMITIDO' ? 'success' : 'warning'}
                         text={tarea.estado_ep === 'EMITIDO' ? 'white' : 'dark'}
                       >
                         {tarea.estado_ep}

@@ -19,18 +19,18 @@ const EstadoPagoCard = ({ ep, onEmitirClick, compact = false }) => {
                 onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
-                <Card.Body className="p-2">
+                <Card.Body className="p-1.5">
                     {/* Header: Código + Badge */}
-                    <div className="d-flex justify-content-between align-items-center mb-1">
-                        <span className="fw-bold text-dark small" style={{ fontSize: '0.8rem' }}>{ep.codigo}</span>
-                        <Badge bg={isEmitido ? 'purple' : 'warning'} text={isEmitido ? 'white' : 'dark'} style={{ fontSize: '0.65rem', padding: '0.25em 0.5em' }}>
+                    <div className="d-flex justify-content-between align-items-center mb-0.5">
+                        <span className="fw-bold text-dark text-[11px]">{ep.codigo}</span>
+                        <Badge bg={isEmitido ? 'purple' : 'warning'} text={isEmitido ? 'white' : 'dark'} style={{ fontSize: '10px', padding: '0.2em 0.4em' }}>
                             {ep.estado === 'EMITIDO' ? 'EMITIDO' : 'PAGADO'}
                         </Badge>
                     </div>
 
                     {/* Body: Proveedor (Truncado) */}
-                    <div className="mb-1 text-truncate" title={ep.proveedor?.nombre || 'Desconocido'}>
-                        <small className="text-secondary fw-semibold" style={{ fontSize: '0.7rem' }}>
+                    <div className="mb-0.5 text-truncate" title={ep.proveedor?.nombre || 'Desconocido'}>
+                        <small className="text-secondary fw-semibold text-[10px]">
                             <i className="bi bi-building me-1"></i>
                             {ep.proveedor?.nombre?.substring(0, 18) || 'Prov. Desconocido'}
                             {ep.proveedor?.nombre?.length > 18 ? '...' : ''}
@@ -38,9 +38,9 @@ const EstadoPagoCard = ({ ep, onEmitirClick, compact = false }) => {
                     </div>
 
                     {/* Footer: Monto */}
-                    <div className="d-flex justify-content-between align-items-center mt-2 border-top pt-1">
-                        <small className="text-muted" style={{ fontSize: '0.65rem' }}>{ep.cantidad_items || 0} It.</small>
-                        <span className="fw-bold text-dark" style={{ fontSize: '0.85rem' }}>
+                    <div className="d-flex justify-content-between align-items-center mt-1.5 border-top pt-1 text-[10px]">
+                        <small className="text-muted">{ep.cantidad_items || 0} It.</small>
+                        <span className="fw-bold text-dark">
                             ${Number(ep.monto_total || 0).toLocaleString('es-CL')}
                         </span>
                     </div>

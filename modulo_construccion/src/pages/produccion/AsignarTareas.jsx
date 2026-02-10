@@ -929,12 +929,12 @@ function AsignarTareas() {
     }
 
     return (
-        <div className="container-fluid d-flex flex-column bg-white" style={{ height: 'calc(100vh - 64px)' }}>
+        <div className="container-fluid d-flex flex-column bg-white" style={{ height: 'calc(100vh - 56px)' }}>
             {/* HEADER */}
-            <div className="bg-white border-bottom shadow-sm px-4 py-3">
-                <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="bg-white border-bottom shadow-sm px-3 py-2">
+                <div className="d-flex justify-content-between align-items-center mb-2">
                     <div className="d-flex align-items-center gap-3">
-                        <Button variant="outline-dark" size="sm" onClick={() => navigate(`/proyecto/${projectId}`)} className="rounded-circle border-0 bg-light"><i className="bi bi-arrow-left"></i></Button>
+
                         <div><h5 className="fw-bold text-dark mb-0">Planificación Kanban</h5><small className="text-muted">Gestión visual.</small></div>
                     </div>
                     {/* BOTONES DE ACCIÓN (Header) */}
@@ -980,9 +980,9 @@ function AsignarTareas() {
                     </div>
                 </div>
                 <Row className="g-2">
-                    <Col md={3}><Select options={cuadrillasOpts} placeholder="Filtrar Subcontrato..." isClearable onChange={setFilterProv} styles={{ control: (base) => ({ ...base, minHeight: '32px', height: '32px', fontSize: '0.85rem' }) }} /></Col>
-                    <Col md={3}><Select options={zonasOpts} placeholder="Filtrar Zona..." isClearable onChange={setFilterZona} styles={{ control: (base) => ({ ...base, minHeight: '32px', height: '32px', fontSize: '0.85rem' }) }} /></Col>
-                    <Col md={3}><DatePicker selectsRange startDate={filterDateRange[0]} endDate={filterDateRange[1]} onChange={(update) => setFilterDateRange(update)} placeholderText="Filtrar Fechas" className="form-control form-control-sm" dateFormat="dd/MM/yyyy" isClearable /></Col>
+                    <Col md={3}><Select options={cuadrillasOpts} placeholder="Filtrar Subcontrato..." isClearable onChange={setFilterProv} styles={{ control: (base) => ({ ...base, minHeight: '30px', height: '30px', fontSize: '0.8rem' }) }} /></Col>
+                    <Col md={3}><Select options={zonasOpts} placeholder="Filtrar Zona..." isClearable onChange={setFilterZona} styles={{ control: (base) => ({ ...base, minHeight: '30px', height: '30px', fontSize: '0.8rem' }) }} /></Col>
+                    <Col md={3}><DatePicker selectsRange startDate={filterDateRange[0]} endDate={filterDateRange[1]} onChange={(update) => setFilterDateRange(update)} placeholderText="Filtrar Fechas" className="form-control form-control-sm h-[30px] text-[0.8rem]" dateFormat="dd/MM/yyyy" isClearable /></Col>
                 </Row>
             </div>
 
@@ -1019,9 +1019,9 @@ function AsignarTareas() {
                                 <div className="d-flex flex-column h-100 rounded-3 shadow-sm"
                                     style={{
                                         flex: '1 1 0px',
-                                        minWidth: '250px',
+                                        minWidth: '220px',
                                         backgroundColor: '#e0e7ff',
-                                        padding: '8px'
+                                        padding: '6px'
                                     }}>
                                     <div className="d-flex align-items-center justify-content-between mb-2 px-1">
                                         <span className="fw-bold text-dark small text-uppercase">
@@ -1088,7 +1088,8 @@ function AsignarTareas() {
                             />
                         ))}
                 </div>
-            )}
+            )
+            }
 
             {/* Modal de Gestión de EP */}
             <ModalGestionEP
@@ -1776,13 +1777,13 @@ function AsignarTareas() {
                     <Button size="sm" variant="primary" onClick={() => setShowGeoModal(false)}>Confirmar Datos</Button>
                 </Modal.Footer>
             </Modal>
-        </div>
+        </div >
     )
 }
 
 const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onEmitirFromTask, onFinalizarSomyl }) => (
-    <div className="d-flex flex-column h-100 rounded-3 shadow-sm" style={{ flex: '1 1 0px', minWidth: '250px', backgroundColor: '#ebecf0', padding: '8px' }}>
-        <div className="d-flex align-items-center justify-content-between mb-2 px-1"><span className="fw-bold text-dark small text-uppercase">{title}</span><span className="badge bg-secondary rounded-pill text-white">{tasks.length}</span></div>
+    <div className="d-flex flex-column h-100 rounded-3 shadow-sm" style={{ flex: '1 1 0px', minWidth: '220px', backgroundColor: '#ebecf0', padding: '6px' }}>
+        <div className="d-flex align-items-center justify-content-between mb-1.5 px-1"><span className="fw-bold text-dark text-[10px] text-uppercase">{title}</span><span className="badge bg-secondary rounded-pill text-white" style={{ fontSize: '0.7rem' }}>{tasks.length}</span></div>
         <Droppable droppableId={id}>
             {(provided, snapshot) => (
                 <div {...provided.droppableProps} ref={provided.innerRef} className={`flex-grow-1 ${snapshot.isDraggingOver ? 'bg-secondary bg-opacity-25' : ''}`} style={{ overflowY: 'auto', minHeight: '100px', borderRadius: '4px' }}>
@@ -1790,8 +1791,8 @@ const KanbanColumn = ({ id, title, color, tasks, onDblClick, onQuickConfirm, onE
                         <Draggable key={task.id} draggableId={String(task.id)} index={index}>
                             {(provided) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className="mb-1" onDoubleClick={() => onDblClick(task)}>
-                                    <Card className={`border-0 shadow-sm task-card-hover ${id === 'APROBADA' ? 'bg-success bg-opacity-10' : ''}`} style={{ fontSize: '0.8rem' }}>
-                                        <Card.Body className="p-2">
+                                    <Card className={`border-0 shadow-sm task-card-hover ${id === 'APROBADA' ? 'bg-success bg-opacity-10' : ''}`} style={{ fontSize: '0.75rem' }}>
+                                        <Card.Body className="p-1.5">
                                             {/* FILA 1: Actividad + EP Badge */}
                                             <div className="d-flex justify-content-between align-items-start gap-1 mb-1">
                                                 <span className="fw-semibold text-dark text-truncate" style={{ flex: 1, lineHeight: 1.2 }} title={task.items?.length > 1 ? 'Varias actividades' : (task.items?.length === 1 ? (task.items[0].actividad?.nombre || task.items[0].sub_actividad?.nombre) : (task.actividad?.nombre || task.sub_actividad?.nombre))}>
