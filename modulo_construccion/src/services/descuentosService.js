@@ -9,7 +9,7 @@ export const descuentosService = {
       .select(`
         *,
         proveedor:proveedores(id, nombre),
-        estado_pago:prod_estados_pago(id, codigo)
+        estado_pago:prod_estados_pago(id, codigo, estado)
       `)
       .eq('proyecto_id', proyectoId)
       .order('fecha', { ascending: false })

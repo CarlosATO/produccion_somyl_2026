@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Table, Spinner, Badge, Alert, Modal, Row, Col, Container } from 'react-bootstrap';
 import { reportesService } from '../../../services/reportesService';
 import { tareasService } from '../../../services/tareasService';
+import { descuentosService } from '../../../services/descuentosService'; // <--- IMPORTAR
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -42,6 +43,10 @@ const ResumenSubcontrato = () => {
     const [showModalProd, setShowModalProd] = useState(false);
     const [modalDataProd, setModalDataProd] = useState({ tipo: null, proveedor: null, tareas: [] });
 
+    // NUEVO MODAL DESCUENTOS
+    const [showModalDesc, setShowModalDesc] = useState(false);
+    const [modalDataDesc, setModalDataDesc] = useState({ proveedor: null, descuentos: [] });
+
     const [showModalGastos, setShowModalGastos] = useState(false);
     const [desgloseGastos, setDesgloseGastos] = useState([]);
     const [detalleGastoItem, setDetalleGastoItem] = useState(null);
@@ -54,7 +59,7 @@ const ResumenSubcontrato = () => {
     const [loadingFicha, setLoadingFicha] = useState(false);
 
     const [totales, setTotales] = useState({
-        costo: 0, venta: 0, emitido: 0, pendiente: 0, gastosOperativos: 0
+        costo: 0, venta: 0, emitido: 0, pendiente: 0, descuentosPendientes: 0, gastosOperativos: 0
     });
 
     useEffect(() => { cargarDatos(); }, [projectId]);
@@ -63,9 +68,10 @@ const ResumenSubcontrato = () => {
         try {
             setLoading(true);
             setError(null);
-            const [todasLasTareas, gastosOp] = await Promise.all([
+            const [todasLasTareas, gastosOp, todosLosDescuentos] = await Promise.all([
                 tareasService.getTareas(projectId),
-                reportesService.getGastosOperativos(projectId)
+                reportesService.getGastosOperativos(projectId),
+                descuentosService.getDescuentos(projectId)
             ]);
 
             const proveedoresMap = {};
@@ -78,7 +84,9 @@ const ResumenSubcontrato = () => {
                         nombre_proveedor: provNombre,
                         trabajos_count: 0,
                         tareas_produccion: [], tareas_emitidas: [], tareas_pendientes: [],
-                        produccion_costo: 0, produccion_venta: 0, monto_emitido: 0, monto_pendiente: 0
+                        produccion_costo: 0, produccion_venta: 0, monto_emitido: 0, monto_pendiente: 0,
+                        descuentos_pendientes: 0, // <--- NUEVO
+                        descuentos_pendientes_list: [] // <--- LISTA DETALLE
                     };
                 }
                 const row = proveedoresMap[provId];
@@ -114,14 +122,27 @@ const ResumenSubcontrato = () => {
                 }
             });
 
+            // PROCESAR DESCUENTOS PENDIENTES
+            todosLosDescuentos.forEach(d => {
+                const provId = d.proveedor_id;
+                if (proveedoresMap[provId]) {
+                    const esPendiente = !d.estado_pago_id || (d.estado_pago && d.estado_pago.estado !== 'EMITIDO' && d.estado_pago.estado !== 'PAGADO');
+                    if (esPendiente) {
+                        proveedoresMap[provId].descuentos_pendientes += Number(d.monto || 0);
+                        proveedoresMap[provId].descuentos_pendientes_list.push(d); // <--- GUARDAR DETALLE
+                    }
+                }
+            });
+
             const dataFinal = Object.values(proveedoresMap);
             setData(dataFinal);
             const newTotales = dataFinal.reduce((acc, row) => ({
                 costo: acc.costo + row.produccion_costo,
                 venta: acc.venta + row.produccion_venta,
                 emitido: acc.emitido + row.monto_emitido,
-                pendiente: acc.pendiente + row.monto_pendiente
-            }), { costo: 0, venta: 0, emitido: 0, pendiente: 0 });
+                pendiente: acc.pendiente + row.monto_pendiente,
+                descuentosPendientes: acc.descuentosPendientes + row.descuentos_pendientes
+            }), { costo: 0, venta: 0, emitido: 0, pendiente: 0, descuentosPendientes: 0 });
             newTotales.gastosOperativos = Number(gastosOp);
             setTotales(newTotales);
         } catch (err) { console.error(err); setError("Error cargando datos."); }
@@ -129,6 +150,12 @@ const ResumenSubcontrato = () => {
     };
 
     const handleClickCell = (tipo, row) => {
+        if (tipo === 'descuentos') {
+            setModalDataDesc({ proveedor: row.nombre_proveedor, descuentos: row.descuentos_pendientes_list });
+            setShowModalDesc(true);
+            return;
+        }
+
         let tareas = [];
         if (tipo === 'produccion') tareas = row.tareas_produccion;
         else if (tipo === 'emitido') tareas = row.tareas_emitidas;
@@ -287,7 +314,9 @@ const ResumenSubcontrato = () => {
                             <th className="py-3 text-end border-0">COSTO MO</th>
                             <th className="py-3 text-end border-0 text-success">MARGEN MO</th>
                             <th className="py-3 text-end border-0 text-success">EMITIDO</th>
-                            <th className="py-3 text-end border-0 text-warning pe-4">PENDIENTE</th>
+                            <th className="py-3 text-end border-0 text-secondary">PROD. PENDIENTE</th>
+                            <th className="py-3 text-end border-0 text-danger">DESC. PENDIENTES</th>
+                            <th className="py-3 text-end border-0 text-warning pe-4">SALDO PENDIENTE</th>
                         </tr>
                     </thead>
                     <tbody style={{ fontSize: '0.85rem' }}>
@@ -299,7 +328,9 @@ const ResumenSubcontrato = () => {
                                 <td className="text-end fw-bold text-primary" style={{ cursor: 'pointer' }} onClick={() => handleClickCell('produccion', row)}>{formatMoney(row.produccion_costo)}</td>
                                 <td className="text-end fw-bold text-success bg-success bg-opacity-10">{formatMoney(row.produccion_venta - row.produccion_costo)}</td>
                                 <td className="text-end text-success fw-medium" style={{ cursor: 'pointer' }} onClick={() => handleClickCell('emitido', row)}>{formatMoney(row.monto_emitido)}</td>
-                                <td className="text-end text-warning fw-bold pe-4" style={{ cursor: 'pointer' }} onClick={() => handleClickCell('pendiente', row)}>{formatMoney(row.monto_pendiente)}</td>
+                                <td className="text-end text-secondary fw-medium" style={{ cursor: 'pointer' }} onClick={() => handleClickCell('pendiente', row)}>{formatMoney(row.monto_pendiente)}</td>
+                                <td className="text-end text-danger fw-medium" style={{ cursor: 'pointer' }} onClick={() => handleClickCell('descuentos', row)}>{formatMoney(row.descuentos_pendientes)}</td>
+                                <td className="text-end text-warning fw-bold pe-4">{formatMoney(row.monto_pendiente - row.descuentos_pendientes)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -312,7 +343,9 @@ const ResumenSubcontrato = () => {
                                 <td className="text-end">{formatMoney(totales.costo)}</td>
                                 <td className="text-end text-success">{formatMoney(totales.venta - totales.costo)}</td>
                                 <td className="text-end text-success">{formatMoney(totales.emitido)}</td>
-                                <td className="text-end text-warning pe-4">{formatMoney(totales.pendiente)}</td>
+                                <td className="text-end text-secondary">{formatMoney(totales.pendiente)}</td>
+                                <td className="text-end text-danger">{formatMoney(totales.descuentosPendientes)}</td>
+                                <td className="text-end text-warning pe-4">{formatMoney(totales.pendiente - totales.descuentosPendientes)}</td>
                             </tr>
                         </tfoot>
                     )}
@@ -327,6 +360,51 @@ const ResumenSubcontrato = () => {
                         <tbody>{modalDataProd.tareas.map((t, i) => (<tr key={i}><td>{t.nombre}</td><td className="text-end">{formatMoney(t.costo)}</td></tr>))}</tbody>
                     </Table>
                 </Modal.Body>
+            </Modal>
+
+            {/* MODAL DESCUENTOS PENDIENTES */}
+            <Modal show={showModalDesc} onHide={() => setShowModalDesc(false)} size="lg" centered scrollable>
+                <Modal.Header closeButton className="bg-danger text-white">
+                    <Modal.Title className="h6 mb-0">Descuentos Pendientes: {modalDataDesc.proveedor}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="p-0">
+                    <Table hover striped className="mb-0 small align-middle">
+                        <thead className="bg-light text-secondary">
+                            <tr>
+                                <th className="ps-4">Fecha</th>
+                                <th>Tipo / Glosa</th>
+                                <th className="text-end pe-4">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {modalDataDesc.descuentos.length > 0 ? (
+                                modalDataDesc.descuentos.map((d, i) => (
+                                    <tr key={i}>
+                                        <td className="ps-4 text-muted">{formatDate(d.fecha)}</td>
+                                        <td>
+                                            <div className="fw-bold text-dark">{d.tipo || 'Descuento'}</div>
+                                            <small className="text-muted">{d.observacion || d.glosa || '-'}</small>
+                                        </td>
+                                        <td className="text-end pe-4 fw-bold text-danger">{formatMoney(d.monto)}</td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr><td colSpan="3" className="text-center py-3 text-muted">No hay descuentos pendientes.</td></tr>
+                            )}
+                        </tbody>
+                        <tfoot className="bg-light border-top">
+                            <tr>
+                                <td colSpan="2" className="text-end fw-bold py-2 text-uppercase text-secondary">Total Descuentos:</td>
+                                <td className="text-end pe-4 fw-bold py-2 fs-6 text-danger">
+                                    {formatMoney(modalDataDesc.descuentos.reduce((acc, curr) => acc + Number(curr.monto || 0), 0))}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </Table>
+                </Modal.Body>
+                <Modal.Footer className="py-2">
+                    <Button variant="secondary" size="sm" onClick={() => setShowModalDesc(false)}>Cerrar</Button>
+                </Modal.Footer>
             </Modal>
 
             {/* MODAL 2: GASTOS OPERATIVOS */}
