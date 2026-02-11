@@ -351,6 +351,9 @@ function Cubicacion() {
               ))}
 
               {filteredZonas.length === 0 && <th className="text-muted fst-italic fw-normal text-center bg-white">Sin zonas</th>}
+
+              {/* SPACER COLUMN */}
+              <th className="p-0 border-0 bg-transparent"></th>
             </tr>
           </thead>
 
@@ -385,7 +388,11 @@ function Cubicacion() {
                     )
                   })}
                   {filteredZonas.length === 0 && <td className="border-bottom"></td>}
+
+                  {/* SPACER COLUMN */}
+                  <td className="border-0 p-0"></td>
                 </tr>
+
 
                 {/* SUB-ACTIVIDADES */}
                 {act.sub_actividades?.map(sub => (
@@ -417,6 +424,9 @@ function Cubicacion() {
                       )
                     })}
                     {filteredZonas.length === 0 && <td className="border-bottom"></td>}
+
+                    {/* SPACER COLUMN (To prevent stretching) */}
+                    <td className="border-0 p-0"></td>
                   </tr>
                 ))}
               </React.Fragment>
