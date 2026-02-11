@@ -13,6 +13,7 @@ import GestionDescuentos from './pages/produccion/GestionDescuentos';
 import ResumenSubcontrato from './pages/produccion/reportes/ResumenSubcontrato';
 import ProduccionActividad from './pages/produccion/reportes/ProduccionActividad';
 import EstadosPagos from './pages/produccion/reportes/EstadosPagos';
+import ReporteCubicacion from './pages/produccion/reportes/ReporteCubicacion'; // <--- IMPORTAR
 import ProjectLayout from './layouts/ProjectLayout';
 
 // --- Placeholder Components ---
@@ -61,6 +62,7 @@ function ProtectedLayout() {
             <Route path="reportes/resumen-subcontrato" element={<ResumenSubcontrato />} />
             <Route path="reportes/produccion-actividad" element={<ProduccionActividad />} />
             <Route path="reportes/estado-pagos" element={<EstadosPagos />} />
+            <Route path="reportes/cubicacion" element={<ReporteCubicacion />} />
           </Route>
 
           {/* 3. RUTAS GLOBALES */}

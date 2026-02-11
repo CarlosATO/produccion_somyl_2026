@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Modal, Table, Badge } from 'react-bootstrap';
 import {
     BarChart,
     Bar,
@@ -8,12 +9,12 @@ import {
     Tooltip,
     Legend,
     ResponsiveContainer,
-    PieChart,
     Pie,
     Cell
 } from 'recharts';
 import { reportesService } from '../services/reportesService';
 import { tareasService } from '../services/tareasService';
+import { cubicacionService } from '../services/cubicacionService'; // <--- NUEVO IMPORT
 import { AlertCircle, TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
@@ -27,8 +28,16 @@ export default function FinanceDashboard({ projectId }) {
         utilidad: 0,
         margen: 0,
         gasto_realizado_neto: 0,
-        deuda_pendiente_neto: 0
+        deuda_pendiente_neto: 0,
+        venta_cubicada: 0
     });
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [detailType, setDetailType] = useState(null); // 'ingresos', 'gastos', etc.
+
+    // NUEVO MODAL VENTA CUBICADA
+    const [showModalVenta, setShowModalVenta] = useState(false);
+    const [detalleVentaData, setDetalleVentaData] = useState([]);
+
     const [chartData, setChartData] = useState([]); // Para gráfico de barras
     const [pieData, setPieData] = useState([]);     // Para gráfico circular
     const [loading, setLoading] = useState(true);
@@ -42,10 +51,12 @@ export default function FinanceDashboard({ projectId }) {
             setLoading(true);
 
             // 1. Carga paralela de datos
-            const [todasLasTareas, estadoFinanciero, gastosRaw] = await Promise.all([
+            const [todasLasTareas, estadoFinanciero, gastosRaw, cubicaciones, zonas] = await Promise.all([
                 tareasService.getTareas(projectId),
                 reportesService.getEstadoFinancieroProyecto(projectId),
-                reportesService.getGastosRaw(projectId)
+                reportesService.getGastosRaw(projectId),
+                cubicacionService.getCubicaciones(projectId),
+                cubicacionService.getZonas(projectId)
             ]);
 
             // 2. Procesar Tareas y Subcontratistas
@@ -54,8 +65,40 @@ export default function FinanceDashboard({ projectId }) {
             let totalCostoMO_Global = 0;
             let totalCostoMO_Pendiente = 0; // Sin EP o Borrador
             let totalVenta = 0;
+            let totalVentaCubicada = 0; // <--- NUEVO (Cubicado / Presupuestado)
+
+            // CALCULAR VENTA CUBICADA REAL (Desde Matriz) y DESGLOSAR POR ZONA
+            const mapaVentaPorZona = {}; // ZonaID -> Total
+            if (cubicaciones && cubicaciones.length > 0) {
+                cubicaciones.forEach(c => {
+                    const cant = Number(c.cantidad) || 0;
+                    const precio = Number(c.actividad?.valor_venta || c.sub_actividad?.valor_venta || 0);
+                    const totalLinea = cant * precio;
+
+                    totalVentaCubicada += totalLinea;
+
+                    // Acumular por Zona
+                    if (totalLinea > 0 && c.zona_id) {
+                        mapaVentaPorZona[c.zona_id] = (mapaVentaPorZona[c.zona_id] || 0) + totalLinea;
+                    }
+                });
+            }
+
+            // Preparar Datos para Modal Venta Cubicada
+            const listaVentaPorZona = zonas.map(z => ({
+                id: z.id,
+                nombre: z.nombre,
+                total: mapaVentaPorZona[z.id] || 0
+            })).filter(z => z.total > 0).sort((a, b) => b.total - a.total);
+
+            setDetalleVentaData(listaVentaPorZona);
 
             todasLasTareas.forEach(tarea => {
+
+                // YA NO CALCULAMOS VENTA CUBICADA DESDE TAREAS
+                // const itemsTodo = (tarea.items && tarea.items.length > 0) ? tarea.items : [tarea];
+                // itemsTodo.forEach(item => { ... });
+
                 if (tarea.proveedor?.id) {
                     subcontratistasIds.add(tarea.proveedor.id);
                 }
@@ -129,7 +172,8 @@ export default function FinanceDashboard({ projectId }) {
                 utilidad,
                 margen,
                 gasto_realizado_neto: gastoRealNeto,
-                deuda_pendiente_neto: estadoFinanciero.saldo_pendiente_neto
+                deuda_pendiente_neto: estadoFinanciero.saldo_pendiente_neto,
+                venta_cubicada: totalVentaCubicada
             });
 
             // 5. Preparar Datos Gráfico Barras
@@ -361,7 +405,21 @@ export default function FinanceDashboard({ projectId }) {
             <DetailModal />
 
             {/* 1. KPIs ROW */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+
+                {/* NUEVO: VENTA CUBICADA */}
+                <div
+                    onDoubleClick={() => setShowModalVenta(true)}
+                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all cursor-pointer select-none"
+                    title="Doble Clic para Ver Detalle por Zona"
+                >
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="p-1.5 bg-cyan-50 text-cyan-600 rounded-lg"><DollarSign size={18} /></div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Venta Cubicada</span>
+                    </div>
+                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.venta_cubicada)}</div>
+                    <div className="text-[10px] text-cyan-500 mt-0.5 font-bold">Presupuesto Inicial</div>
+                </div>
 
                 {/* INGRESOS (Clickable) */}
                 <div
@@ -546,6 +604,47 @@ export default function FinanceDashboard({ projectId }) {
                 </div>
             </div>
 
+            {/* 3. MODAL DETALLE VENTA CUBICADA */}
+            <Modal show={showModalVenta} onHide={() => setShowModalVenta(false)} centered scrollable>
+                <Modal.Header closeButton className="bg-cyan-50 text-cyan-800">
+                    <Modal.Title className="h6 fw-bold">
+                        <i className="bi bi-layers-half me-2"></i>Desglose Venta Cubicada
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="p-0">
+                    <Table hover striped className="mb-0 small align-middle">
+                        <thead className="bg-light text-secondary">
+                            <tr>
+                                <th className="ps-4">Zona</th>
+                                <th className="text-end pe-4">Monto Cubicado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {detalleVentaData.length > 0 ? (
+                                detalleVentaData.map((item) => (
+                                    <tr key={item.id}>
+                                        <td className="ps-4 fw-medium text-slate-700">{item.nombre}</td>
+                                        <td className="text-end pe-4 font-monospace">{formatMoney(item.total)}</td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="2" className="text-center py-3 text-muted">Sin datos cubicados</td>
+                                </tr>
+                            )}
+                        </tbody>
+                        <tfoot className="bg-light">
+                            <tr>
+                                <td className="text-end fw-bold text-secondary pe-3">TOTAL:</td>
+                                <td className="text-end pe-4 fw-bold text-cyan-700">{formatMoney(kpis.venta_cubicada)}</td>
+                            </tr>
+                        </tfoot>
+                    </Table>
+                </Modal.Body>
+                <Modal.Footer className="py-2 bg-light border-top-0">
+                    <small className="text-muted w-100 text-center">Datos según Matriz de Cubicación</small>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 }

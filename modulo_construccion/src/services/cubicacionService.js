@@ -38,8 +38,8 @@ export const cubicacionService = {
       .from('prod_cubicaciones')
       .select(`
         *,
-        actividad:prod_actividades(id, nombre, unidad),
-        sub_actividad:prod_sub_actividades(id, nombre, unidad)
+        actividad:prod_actividades(id, nombre, unidad, valor_venta),
+        sub_actividad:prod_sub_actividades(id, nombre, unidad, valor_venta)
       `)
       .eq('proyecto_id', proyectoId)
     if (error) throw error

@@ -107,6 +107,7 @@ export default function RibbonMenu({ projectId }) {
                         <ToolButton icon={BarChart3} label="Producción" path="/reportes/produccion-actividad" color="text-indigo-500" />
                         <ToolButton icon={PieChart} label="Resultados" path="/reportes/resumen-subcontrato" color="text-violet-500" />
                         <ToolButton icon={Receipt} label="Est. Pagos" path="/reportes/estado-pagos" color="text-red-500" />
+                        <ToolButton icon={Calculator} label="Reporte Cubicación" path="/reportes/cubicacion" color="text-emerald-500" />
                     </div>
                 )}
 
