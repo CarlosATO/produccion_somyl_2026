@@ -6,6 +6,8 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import Select from 'react-select';
 import DocumentoEP from '../../../components/pdf/DocumentoEP';
+import { supabase } from '../../../services/supabaseClient'; // Importar supabase
+import { useAuth } from '../../../context/AuthContext'; // <--- IMPORTAR AUTH CONTEXT
 import { estadosPagoService } from '../../../services/estadosPagoService';
 import { tareasService } from '../../../services/tareasService';
 
@@ -13,21 +15,21 @@ const EstadosPagos = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
 
+  const { user: currentUser } = useAuth(); // <--- USAR HOOK DEL CONTEXTO
   const [eps, setEps] = useState([]);
   const [tareas, setTareas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Filtros
-  const [filterEstado, setFilterEstado] = useState('todos'); // 'todos', 'emitido', 'borrador'
+  const [filterEstado, setFilterEstado] = useState('todos');
   const [filterProveedor, setFilterProveedor] = useState(null);
   const [filterFechaDesde, setFilterFechaDesde] = useState('');
   const [filterFechaHasta, setFilterFechaHasta] = useState('');
 
-  // Modal para visualización
-  const [showModal, setShowModal] = useState(false);
   const [epSeleccionado, setEpSeleccionado] = useState(null);
   const [tareasDelEp, setTareasDelEp] = useState([]);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -81,6 +83,25 @@ const EstadosPagos = () => {
     setTareasDelEp(tareasAsociadas);
 
     setShowModal(true);
+  };
+
+  // Función para eliminar EP (Admin)
+  const handleDeleteEP = async (ep) => {
+    if (!currentUser || currentUser.email !== 'carlosalegria@me.com') return;
+
+    if (!window.confirm(`⚠️ ESTÁS A PUNTO DE ELIMINAR UN ESTADO DE PAGO ⚠️\n\nEP: ${ep.codigo}\n\nCONSECUENCIAS:\n1. El documento se borrará permanentemente.\n2. Todas las tareas asociadas volverán al estado "APROBADA" (Listas para Pago).\n\n¿Estás seguro de continuar?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await estadosPagoService.delete(ep.id);
+      cargarDatos();
+    } catch (err) {
+      console.error(err);
+      alert("Error al eliminar: " + err.message);
+      setLoading(false);
+    }
   };
 
   const formatMoney = (amount) => {
@@ -268,6 +289,19 @@ const EstadosPagos = () => {
                           )}
                         </PDFDownloadLink>
                       )}
+
+                      {/* BOTÓN ELIMINAR (SOLO ADMIN) */}
+                      {currentUser && currentUser.email === 'carlosalegria@me.com' && (
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          className="ms-1"
+                          onClick={() => handleDeleteEP(ep)}
+                          title="Eliminar EP (Admin)"
+                        >
+                          <i className="bi bi-trash"></i>
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -372,7 +406,25 @@ const EstadosPagos = () => {
 
               {/* Acciones */}
               <hr />
-              <div className="d-flex gap-2 justify-content-end">
+              <div className="d-flex gap-2 justify-content-end align-items-center">
+
+                {/* BOTÓN ELIMINAR (SOLO ADMIN) - EN MODAL DETALLE */}
+                {currentUser && currentUser.email === 'carlosalegria@me.com' && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => {
+                      if (window.confirm(`⚠️ ELIMINAR EP ${epSeleccionado.codigo} ⚠️\n\n¿Estás seguro? Esta acción es irreversible y liberará todas las tareas.`)) {
+                        handleDeleteEP(epSeleccionado);
+                        setShowModal(false);
+                      }
+                    }}
+                    className="me-auto" // Para que se vaya a la izquierda
+                  >
+                    <i className="bi bi-trash me-2"></i>Eliminar EP
+                  </Button>
+                )}
+
                 {epSeleccionado.estado === 'EMITIDO' && (
                   <PDFDownloadLink
                     document={<DocumentoEP epData={epSeleccionado} tareas={tareasDelEp} proyectoInfo={{}} />}

@@ -3,10 +3,12 @@ import { Modal, Button, Table, Form, Badge, Spinner, Row, Col, Alert } from 'rea
 import { format } from 'date-fns';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import DocumentoEP from './pdf/DocumentoEP';
+import { supabase } from '../services/supabaseClient';
 import { tareasService } from '../services/tareasService'; // Ajusta tu ruta
 import { descuentosService } from '../services/descuentosService'; // Ajusta tu ruta
+import { estadosPagoService } from '../services/estadosPagoService';
 
-const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
+const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo, currentUser }) => {
     const [loading, setLoading] = useState(true);
     // Detectamos si el EP ya fue procesado para bloquear la edición
     const isReadOnly = ['EMITIDO', 'PAGADO'].includes(ep?.estado);
@@ -131,6 +133,27 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
         onEmitir(payload);
     };
 
+    // --- ACCIÓN ELIMINAR (SOLO ADMIN) ---
+    const handleDelete = async () => {
+        if (!currentUser || currentUser.email !== 'carlosalegria@me.com') return;
+
+        if (!window.confirm(`⚠️ ZONA PELIGROSA: ELIMINAR ESTADO DE PAGO ⚠️\n\nEstás a punto de borrar el EP: ${ep.codigo}\n\nCONSECUENCIAS:\n1. El documento se eliminará permanentemente.\n2. Todas las tareas volverán a estado "APROBADA" (Listas para Pago).\n\n¿Confirmar eliminación?`)) {
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await estadosPagoService.delete(ep.id);
+            onHide();
+            // Recargar para reflejar cambios
+            window.location.reload();
+        } catch (err) {
+            console.error(err);
+            alert("Error al eliminar: " + err.message);
+            setLoading(false);
+        }
+    };
+
     if (!ep) return null;
 
     return (
@@ -145,6 +168,21 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                         Borrador: <strong>{ep.codigo}</strong> | Proveedor: <strong>{ep.proveedor?.nombre}</strong>
                     </div>
                 </div>
+
+                {/* BOTÓN ELIMINAR (SOLO ADMIN) */}
+                {currentUser && currentUser.email?.toLowerCase() === 'carlosalegria@me.com' && (
+                    <div className="ms-auto me-3 d-flex align-items-center">
+                        <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={handleDelete}
+                            title="Eliminar EP y liberar tareas"
+                            className="fw-bold"
+                        >
+                            <i className="bi bi-trash me-2"></i>Eliminar EP
+                        </Button>
+                    </div>
+                )}
             </Modal.Header>
 
             <Modal.Body className="p-0">
@@ -340,13 +378,13 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                                     </div>
 
                                     {/* Botón Cancelar (siempre abajo, limpio) */}
-                                    {!isReadOnly && (
-                                        <div className="text-center mt-3">
+                                    <div className="d-flex justify-content-center align-items-center gap-3 mt-3">
+                                        {!isReadOnly && (
                                             <button className="btn btn-link text-muted text-decoration-none btn-sm" onClick={onHide}>
                                                 Cancelar operación
                                             </button>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

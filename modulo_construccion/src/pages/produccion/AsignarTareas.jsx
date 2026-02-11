@@ -25,6 +25,8 @@ import { proyectosService } from '../../services/proyectosService'
 import { stockService } from '../../services/stockService'
 import { generarExcelPlanificacion } from '../../services/excelExportService'
 import { whatsappService } from '../../services/whatsappService' // <--- NUEVO
+import { supabase } from '../../services/supabaseClient' // <--- IMPORTAR SUPABASE
+import { useAuth } from '../../context/AuthContext' // <--- IMPORTAR AUTH CONTEXT
 import EstadoPagoCard from '../../components/EstadoPagoCard'
 import ModalGestionEP from '../../components/ModalGestionEP'
 
@@ -32,6 +34,7 @@ function AsignarTareas() {
     const { projectId } = useParams()
     const navigate = useNavigate()
     const [loading, setLoading] = useState(true)
+    const { user: currentUser } = useAuth(); // <--- USAR HOOK DEL CONTEXTO
 
     // Datos
     const [tareas, setTareas] = useState([])
@@ -1122,6 +1125,7 @@ function AsignarTareas() {
                 ep={epToManage}
                 onEmitir={procesarEmision}
                 proyectoInfo={proyectoInfo}
+                currentUser={currentUser} // <--- PASAR USUARIO
             />
 
             {/* MODAL - DISEÑO PROFESIONAL */}

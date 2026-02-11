@@ -30,7 +30,7 @@ export const estadosPagoService = {
             .eq('proyecto_id', proyectoId)
             .eq('estado', 'BORRADOR')
             .order('id', { ascending: false });
-            
+
         if (error) return [];
         return data;
     },
@@ -74,12 +74,42 @@ export const estadosPagoService = {
         })
         return { data, error };
     },
-    
+
     // ... tus otras funciones (asignarDueño, actualizarCodigo, etc) ...
     async asignarDueño(epId, proveedorId) {
         return await supabase.from('prod_estados_pago').update({ proveedor_id: proveedorId }).eq('id', epId)
     },
     async actualizarCodigo(epId, nuevoCodigo) {
         return await supabase.from('prod_estados_pago').update({ codigo: nuevoCodigo }).eq('id', epId)
+    },
+
+    // Eliminar EP (Solo Admin)
+    async delete(epId) {
+        // 1. Desvincular tareas y RESETEAR ESTADO a 'APROBADA' para que vuelvan al tablero
+        const { error: errorUpdate } = await supabase
+            .from('prod_tareas')
+            .update({
+                estado_pago_id: null,
+                estado: 'APROBADA'
+            })
+            .eq('estado_pago_id', epId);
+
+        if (errorUpdate) {
+            console.error("Error desvinculando tareas del EP:", errorUpdate);
+            throw new Error("Error al desvincular tareas.");
+        }
+
+        // 2. Eliminar el registro del EP
+        const { error: errorDelete } = await supabase
+            .from('prod_estados_pago')
+            .delete()
+            .eq('id', epId);
+
+        if (errorDelete) {
+            console.error("Error eliminando EP:", errorDelete);
+            throw new Error("Error al eliminar el Estado de Pago.");
+        }
+
+        return true;
     }
 }
