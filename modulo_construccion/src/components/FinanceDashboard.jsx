@@ -144,9 +144,9 @@ export default function FinanceDashboard({ projectId }) {
             setChartData(topProveedores);
 
             // 6. Preparar Datos Gráfico Barras (Distribución Gasto) - HORIZONTAL
-            const distribucionTemp = [
-                { name: 'MANO DE OBRA', value: totalCostoMO_Global }
-            ];
+            // 6. Preparar Datos Gráfico Barras (Distribución Gasto) - HORIZONTAL
+            // CAMBIO: Se elimina "MANO DE OBRA" porque ya está incluido en "ESTADO DE PAGO"
+            const distribucionTemp = [];
 
             Object.entries(desgloseItems).forEach(([item, valor]) => {
                 if (valor > 0) {
@@ -389,9 +389,9 @@ export default function FinanceDashboard({ projectId }) {
                     {/* Subtítulo: PENDIENTE */}
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Sin Estado de Pago</div>
 
-                    {/* Subtítulo: TOTAL HISTÓRICO */}
+                    {/* Subtítulo: TOTAL REALIZADO */}
                     <div className="text-[10px] text-red-400 mt-0.5 pt-2 border-t border-slate-100">
-                        Total Histórico: {formatMoney(kpis.costos_mo_total || 0)}
+                        Total Realizado: {formatMoney(kpis.costos_mo_total || 0)}
                     </div>
                 </div>
 
@@ -540,7 +540,7 @@ export default function FinanceDashboard({ projectId }) {
                     <div className="mt-2 pt-3 border-top text-center">
                         <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block mb-1">Total Gastado</span>
                         <div className="text-lg font-bold text-slate-700 leading-none">
-                            {formatMoney((kpis.costos_mo_total || 0) + (kpis.gasto_realizado_neto || 0))}
+                            {formatMoney(kpis.gasto_realizado_neto || 0)}
                         </div>
                     </div>
                 </div>
