@@ -620,6 +620,30 @@ function AsignarTareas() {
                 }
             }
 
+            // REGLA DE BLOQUEO: NO PERMITIR APROBAR SI CANTIDAD REAL ES 0
+            if (newStatus === 'APROBADA' && oldStatus !== 'APROBADA') {
+                const updatedTask = updatedTareas.find(t => t.id === movedId);
+                // Verificar si tiene items c/s cantidad real
+                let tieneCantidad = false;
+
+                if (updatedTask.items && updatedTask.items.length > 0) {
+                    // Si tiene items, revisamos si al menos uno tiene cantidad real > 0
+                    // OJO: Podría requerirse que TODOS tengan cantidad. Aquí asumiremos sumatoria > 0
+                    const sumaReal = updatedTask.items.reduce((acc, i) => acc + (Number(i.cantidad_real) || 0), 0);
+                    if (sumaReal > 0) tieneCantidad = true;
+                } else {
+                    // Legacy o tarea simple
+                    if (Number(updatedTask.cantidad_real) > 0) tieneCantidad = true;
+                }
+
+                if (!tieneCantidad) {
+                    alert("⚠️ NO SE PUEDE APROBAR: La tarea no tiene cantidades confirmadas en 'En Ejecución'.");
+                    // Revertimos cambio visual
+                    setTareas(tareas);
+                    return; // Abortamos la llamada al servicio
+                }
+            }
+
             // 🔥 NUEVA LÓGICA: ASIGNACIÓN AUTOMÁTICA AL ENTRAR A APROBADA
             // ⚠️ EXCEPCIÓN: Si el proveedor es "Somyl", NO asignar EP (es trabajo propio)
             if (newStatus === 'APROBADA' && oldStatus !== 'APROBADA') {

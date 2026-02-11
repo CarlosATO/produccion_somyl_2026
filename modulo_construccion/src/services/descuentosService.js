@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient'
 
 export const descuentosService = {
-  
+
   // Obtener todos los descuentos de un proyecto (Opcional: filtrar por proveedor)
   async getDescuentos(proyectoId, proveedorId = null) {
     let query = supabase
@@ -30,7 +30,7 @@ export const descuentosService = {
       .insert(descuento)
       .select()
       .single()
-    
+
     if (error) throw error
     return data
   },
@@ -38,12 +38,12 @@ export const descuentosService = {
   // Traer descuentos pendientes (sin estado_pago_id)
   async getPendientes(proyectoId, proveedorId) {
     const { data, error } = await supabase
-        .from('prod_descuentos')
-        .select('*')
-        .eq('proyecto_id', proyectoId)
-        .eq('proveedor_id', proveedorId)
-        .is('estado_pago_id', null) // <--- CLAVE: Solo los que no se han cobrado
-    
+      .from('prod_descuentos')
+      .select('*')
+      .eq('proyecto_id', proyectoId)
+      .eq('proveedor_id', proveedorId)
+      .is('estado_pago_id', null) // <--- CLAVE: Solo los que no se han cobrado
+
     if (error) {
       console.error('Error getPendientes:', error);
       return [];
@@ -59,9 +59,21 @@ export const descuentosService = {
       .eq('id', id)
     if (error) throw error
     return true
-  }
+  },
 
-  ,
+  // Traer descuentos ASOCIADOS a un EP (para cuando ya está emitido)
+  async getPorEP(epId) {
+    const { data, error } = await supabase
+      .from('prod_descuentos')
+      .select('*')
+      .eq('estado_pago_id', epId)
+
+    if (error) {
+      console.error('Error getPorEP:', error);
+      return [];
+    }
+    return data;
+  },
 
   // Actualizar un descuento existente
   async actualizarDescuento(id, datos) {

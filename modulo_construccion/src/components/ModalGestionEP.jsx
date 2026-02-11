@@ -10,7 +10,7 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
     const [loading, setLoading] = useState(true);
     // Detectamos si el EP ya fue procesado para bloquear la edición
     const isReadOnly = ['EMITIDO', 'PAGADO'].includes(ep?.estado);
-    
+
     // Datos traídos del servidor
     const [tareas, setTareas] = useState([]);
     const [descuentosPendientes, setDescuentosPendientes] = useState([]);
@@ -29,18 +29,26 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
         setLoading(true);
         try {
             // 1. Cargar Tareas asociadas a este EP
-            // Asumo que tienes un método para traer tareas por EP, si no, filtramos las del proyecto
-            const t = await tareasService.getTareasPorEP(ep.id); 
-            
-            // 2. Cargar Descuentos PENDIENTES de este proveedor
-            const d = await descuentosService.getPendientes(ep.proyecto_id, ep.proveedor_id);
+            const t = await tareasService.getTareasPorEP(ep.id);
+
+            // 2. Cargar Descuentos
+            let d = [];
+            if (['EMITIDO', 'PAGADO'].includes(ep.estado)) {
+                // Si está emitido/pagado, traemos SOLO los que se usaron en este EP
+                d = await descuentosService.getPorEP(ep.id);
+            } else {
+                // Si es borrador, traemos los PENDIENTES disponibles del proveedor
+                d = await descuentosService.getPendientes(ep.proyecto_id, ep.proveedor_id);
+            }
 
             setTareas(t);
             setDescuentosPendientes(d);
 
             // Por defecto, seleccionamos TODO (para facilitar la vida)
             setSelectedTasks(t.map(x => x.id));
-            // Los descuentos quizás es mejor que el usuario los elija manualmente, o todos por defecto
+
+            // Si es borrador, seleccionamos todos por defecto (opcional)
+            // Si es emitido, DEBEN venir seleccionados visualmente para el PDF/Resumen
             setSelectedDescuentos(d.map(x => x.id));
 
         } catch (err) {
@@ -84,7 +92,7 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                 return acc + subtotal;
             } else {
                 // Fallback: usar datos de cabecera
-                const cantidad = t.cantidad_real || t.cantidad_asignada || 0; 
+                const cantidad = t.cantidad_real || t.cantidad_asignada || 0;
                 const precio = t.precio_costo_unitario || 0;
                 return acc + (cantidad * precio);
             }
@@ -138,18 +146,18 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                     </div>
                 </div>
             </Modal.Header>
-            
+
             <Modal.Body className="p-0">
-                {loading ? <div className="p-5 text-center"><Spinner animation="border"/></div> : (
+                {loading ? <div className="p-5 text-center"><Spinner animation="border" /></div> : (
                     <div className="d-flex flex-column flex-lg-row h-100">
-                        
+
                         {/* COLUMNA IZQUIERDA: DETALLE DE TAREAS (INGRESOS) */}
-                        <div className="flex-grow-1 p-3 border-end" style={{maxHeight: '60vh', overflowY: 'auto'}}>
+                        <div className="flex-grow-1 p-3 border-end" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                             <h6 className="fw-bold text-secondary mb-3">1. Seleccionar Trabajos a Pagar</h6>
                             <Table hover size="sm" className="small align-middle">
                                 <thead className="bg-light">
                                     <tr>
-                                        <th style={{width:'30px'}}><input type="checkbox" checked={selectedTasks.length === tareas.length && tareas.length > 0} onChange={(e) => setSelectedTasks(e.target.checked ? tareas.map(t=>t.id) : [])} /></th>
+                                        <th style={{ width: '30px' }}><input type="checkbox" checked={selectedTasks.length === tareas.length && tareas.length > 0} onChange={(e) => setSelectedTasks(e.target.checked ? tareas.map(t => t.id) : [])} /></th>
                                         <th>Actividad</th>
                                         <th>Ubicación</th>
                                         <th className="text-end">Cant. Real</th>
@@ -167,7 +175,7 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                                                 const totalRow = cantidadReal * precio;
                                                 const nombreActividad = item.actividad?.nombre || item.sub_actividad?.nombre || 'Actividad';
                                                 const isChecked = selectedTasks.includes(t.id);
-                                                
+
                                                 return (
                                                     <tr key={`${t.id}-item-${idx}`} className={isChecked ? 'table-active' : ''}>
                                                         {idx === 0 && (
@@ -177,7 +185,7 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                                                         )}
                                                         <td>
                                                             <div className="fw-bold">{nombreActividad}</div>
-                                                            <div className="text-muted" style={{fontSize:'0.75em'}}>{format(new Date(t.fecha_asignacion), 'dd/MM')}</div>
+                                                            <div className="text-muted" style={{ fontSize: '0.75em' }}>{format(new Date(t.fecha_asignacion), 'dd/MM')}</div>
                                                         </td>
                                                         <td><Badge bg="light" text="dark" className="border">{t.zona?.nombre}</Badge></td>
                                                         <td className="text-end">{cantidadReal}</td>
@@ -192,13 +200,13 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                                             const nombreActividad = t.actividad?.nombre || t.sub_actividad?.nombre || 'Actividad';
                                             const totalRow = cantidadReal * (t.precio_costo_unitario || 0);
                                             const isChecked = selectedTasks.includes(t.id);
-                                            
+
                                             return (
                                                 <tr key={t.id} className={isChecked ? 'table-active' : ''}>
                                                     <td><input type="checkbox" checked={isChecked} onChange={() => toggleTask(t.id)} /></td>
                                                     <td>
                                                         <div className="fw-bold">{nombreActividad}</div>
-                                                        <div className="text-muted" style={{fontSize:'0.75em'}}>{format(new Date(t.fecha_asignacion), 'dd/MM')}</div>
+                                                        <div className="text-muted" style={{ fontSize: '0.75em' }}>{format(new Date(t.fecha_asignacion), 'dd/MM')}</div>
                                                     </td>
                                                     <td><Badge bg="light" text="dark" className="border">{t.zona?.nombre}</Badge></td>
                                                     <td className="text-end">{cantidadReal}</td>
@@ -214,23 +222,23 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                         </div>
 
                         {/* COLUMNA DERECHA: DESCUENTOS Y RESUMEN */}
-                        <div className="p-3 bg-light" style={{width: '35%', minWidth: '350px'}}>
-                            
+                        <div className="p-3 bg-light" style={{ width: '35%', minWidth: '350px' }}>
+
                             {/* TABLA DE DESCUENTOS */}
                             <div className="mb-4">
                                 <h6 className="fw-bold text-danger mb-3">2. Aplicar Descuentos / Cargos</h6>
                                 {descuentosPendientes.length > 0 ? (
-                                    <div className="bg-white rounded border shadow-sm" style={{maxHeight: '200px', overflowY: 'auto'}}>
+                                    <div className="bg-white rounded border shadow-sm" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                                         <Table size="sm" className="mb-0 small" borderless>
                                             <tbody>
                                                 {descuentosPendientes.map(d => {
                                                     const isChecked = selectedDescuentos.includes(d.id);
                                                     return (
                                                         <tr key={d.id} className={isChecked ? 'bg-danger bg-opacity-10' : ''}>
-                                                            <td style={{width:'30px'}} className="ps-3"><input type="checkbox" checked={isChecked} onChange={() => toggleDescuento(d.id)} /></td>
+                                                            <td style={{ width: '30px' }} className="ps-3"><input type="checkbox" checked={isChecked} onChange={() => toggleDescuento(d.id)} /></td>
                                                             <td>
                                                                 <div className="fw-bold text-dark">{d.tipo}</div>
-                                                                <div className="text-muted text-truncate" style={{maxWidth:'150px'}} title={d.descripcion}>{d.descripcion}</div>
+                                                                <div className="text-muted text-truncate" style={{ maxWidth: '150px' }} title={d.descripcion}>{d.descripcion}</div>
                                                             </td>
                                                             <td className="text-end pe-3 fw-bold text-danger">-${Number(d.monto).toLocaleString()}</td>
                                                         </tr>
@@ -250,7 +258,7 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                             <div className="card border-0 shadow-sm">
                                 <div className="card-body">
                                     <h6 className="card-title fw-bold border-bottom pb-2 mb-3">Resumen de Emisión</h6>
-                                    
+
                                     <div className="d-flex justify-content-between mb-2">
                                         <span className="text-muted">Trabajos ({resumen.countTareas}):</span>
                                         <span className="fw-bold">${resumen.totalNeto.toLocaleString()}</span>
@@ -259,7 +267,7 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                                         <span>Descuentos:</span>
                                         <span>- ${resumen.totalDescuentos.toLocaleString()}</span>
                                     </div>
-                                    
+
                                     <div className="p-2 bg-primary bg-opacity-10 rounded border border-primary d-flex justify-content-between align-items-center mb-3">
                                         <span className="fw-bold text-primary">TOTAL A PAGAR</span>
                                         <span className="fs-4 fw-bold text-dark">${resumen.totalPagar.toLocaleString()}</span>
@@ -323,7 +331,7 @@ const ModalGestionEP = ({ show, onHide, ep, onEmitir, proyectoInfo }) => {
                                                     onClick={handleEmitirClick}
                                                 >
                                                     Confirmar Emisión
-                                                    <span className="d-block small fw-normal text-white-50" style={{fontSize: '0.7rem'}}>
+                                                    <span className="d-block small fw-normal text-white-50" style={{ fontSize: '0.7rem' }}>
                                                         Irreversible
                                                     </span>
                                                 </Button>
