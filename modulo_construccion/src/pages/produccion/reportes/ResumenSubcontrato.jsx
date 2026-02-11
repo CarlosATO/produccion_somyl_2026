@@ -143,7 +143,12 @@ const ResumenSubcontrato = () => {
         setViewGastoState('resumen');
         try {
             const datos = await reportesService.getDesgloseGastos(projectId);
-            setDesgloseGastos(datos);
+            // Mapear respuesta del servicio (item, total_gasto) a estructura local (categoria, total_categoria)
+            const datosMapeados = datos.map(d => ({
+                categoria: d.item,
+                total_categoria: d.total_gasto
+            }));
+            setDesgloseGastos(datosMapeados);
         } catch (e) { console.error(e); }
         finally { setLoadingGastos(false); }
     }

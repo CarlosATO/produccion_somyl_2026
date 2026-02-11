@@ -62,23 +62,66 @@ export const reportesService = {
     return data || 0;
   }
   ,
-  // Obtener Gastos Agrupados por Ítem (Para el primer nivel del modal)
+  // Obtener Gastos Agrupados por Ítem (Manual JS para consistencia)
   async getDesgloseGastos(proyectoId) {
     const idNumerico = Number(proyectoId);
     if (!idNumerico || isNaN(idNumerico)) throw new Error("ID inválido");
 
-    const { data, error } = await supabase.rpc('get_detalle_gastos_operativos', {
-      p_proyecto_id: idNumerico
-    });
+    try {
+      const { data, error } = await supabase
+        .from('orden_de_pago')
+        .select('item, neto_total_recibido')
+        .eq('proyecto', idNumerico)
+        .neq('estado_documento', 'anulado');
 
-    if (error) {
-      console.error('Error obteniendo desglose gastos:', error);
-      throw error;
+      if (error) throw error;
+
+      // Agrupar por Ítem
+      const grouped = {};
+
+      data.forEach(op => {
+        // Normalizar nombre del ítem
+        const itemNombre = op.item ? op.item.trim() : 'Sin Categoría';
+        const monto = Number(op.neto_total_recibido) || 0;
+
+        if (!grouped[itemNombre]) {
+          grouped[itemNombre] = 0;
+        }
+        grouped[itemNombre] += monto;
+      });
+
+      // Convertir a array formato { item, total_gasto }
+      return Object.keys(grouped).map(key => ({
+        item: key,
+        total_gasto: grouped[key]
+      })).sort((a, b) => b.total_gasto - a.total_gasto);
+
+    } catch (error) {
+      console.error('Error obteniendo desglose gastos (manual):', error);
+      return [];
     }
-
-    return data || [];
   },
 
+
+  // Obtener Gastos Raw para procesar en frontend (Dashboard)
+  async getGastosRaw(proyectoId) {
+    const idNumerico = Number(proyectoId);
+    if (!idNumerico || isNaN(idNumerico)) throw new Error("ID inválido");
+
+    try {
+      const { data, error } = await supabase
+        .from('orden_de_pago')
+        .select('id, item, neto_total_recibido, proveedor, estado_documento')
+        .eq('proyecto', idNumerico)
+        .neq('estado_documento', 'anulado');
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error obteniendo gastos raw:', error);
+      return [];
+    }
+  },
 
   // Obtener Filas Específicas de un Ítem (Para el segundo nivel)
   async getDetalleGastosPorItem(proyectoId, itemNombre) {
@@ -242,5 +285,121 @@ export const reportesService = {
     }
 
     return data || [];
+  },
+
+  // NUEVA FUNCIÓN: Obtener Detalle Financiero Completo (Listado de OPs para Modals)
+  async getDetalleFinancieroProyecto(proyectoId) {
+    const idNumerico = Number(proyectoId);
+    if (!idNumerico || isNaN(idNumerico)) throw new Error("ID de proyecto inválido");
+
+    try {
+      // 1. Obtener todas las órdenes de pago y datos relacionados
+      const { data: ordenes, error } = await supabase
+        .from('orden_de_pago')
+        .select('id, orden_numero, proveedor_nombre, fecha_factura, detalle_compra, costo_final_con_iva, neto_total_recibido, estado_pago, factura, orden_compra')
+        .eq('proyecto', idNumerico)
+        .neq('estado_documento', 'anulado')
+        .order('orden_numero', { ascending: false });
+
+      if (error) throw error;
+      if (!ordenes || ordenes.length === 0) return { gastos_netos: [], deuda_neta: [] };
+
+      // 2. Obtener pagos y abonos para calcular saldos
+      const ordenNumeros = [...new Set(ordenes.map(o => o.orden_numero))];
+
+      const { data: fechas } = await supabase
+        .from('fechas_de_pagos_op')
+        .select('orden_numero, fecha_pago')
+        .in('orden_numero', ordenNumeros);
+
+      const { data: abonos } = await supabase
+        .from('abonos_op')
+        .select('orden_numero, monto_abono')
+        .in('orden_numero', ordenNumeros);
+
+      // Mapear pagos y abonos
+      const fechaMap = {};
+      if (fechas) fechas.forEach(f => fechaMap[f.orden_numero] = f.fecha_pago);
+
+      const abonosMap = {};
+      if (abonos) abonos.forEach(a => {
+        abonosMap[a.orden_numero] = (abonosMap[a.orden_numero] || 0) + (Number(a.monto_abono) || 0);
+      });
+
+      // 3. Procesar Listas
+      // Agrupar primero por orden_numero para consolidar valores (por si hay múltiples líneas)
+      const ordenesAgrupadas = {};
+
+      ordenes.forEach(op => {
+        const num = op.orden_numero;
+        if (!ordenesAgrupadas[num]) {
+          ordenesAgrupadas[num] = {
+            ...op,
+            total_bruto: 0,
+            total_neto: 0
+          };
+        }
+        ordenesAgrupadas[num].total_bruto += Number(op.costo_final_con_iva) || 0;
+        ordenesAgrupadas[num].total_neto += Number(op.neto_total_recibido) || 0;
+      });
+
+      const listaGastos = [];
+      const listaDeuda = [];
+
+      Object.values(ordenesAgrupadas).forEach(op => {
+        const num = op.orden_numero;
+        const bruto = op.total_bruto;
+        const neto = op.total_neto;
+
+        // Estado Pago
+        const fechaPago = fechaMap[num];
+        const abonado = abonosMap[num] || 0;
+        const saldoBruto = Math.max(0, bruto - abonado);
+
+        // Determinar estado
+        let estado = 'Pendiente';
+        if (fechaPago) estado = 'Pagado';
+        else if (abonado > 0 && saldoBruto > 0) estado = 'Abono Parcial';
+
+        // Item común
+        const item = {
+          id: op.id,
+          orden_numero: num,
+          proveedor: op.proveedor_nombre,
+          fecha: op.fecha_factura || 'S/F',
+          detalle: op.detalle_compra,
+          documento: op.factura || 'S/N',
+          monto_neto: neto,
+          monto_bruto: bruto,
+          estado: estado,
+          fecha_pago: fechaPago || '-'
+        };
+
+        // Lista 1: Todos los gastos (Siempre van)
+        listaGastos.push(item);
+
+        // Lista 2: Deuda Pendiente
+        if (!fechaPago && saldoBruto > 0) {
+          // Calcular deuda neta proporcional
+          const ratio = saldoBruto / bruto;
+          const deudaNeta = neto * ratio;
+
+          listaDeuda.push({
+            ...item,
+            deuda_neta: Math.round(deudaNeta),
+            saldo_bruto: Math.round(saldoBruto)
+          });
+        }
+      });
+
+      return {
+        gastos_netos: listaGastos.sort((a, b) => b.orden_numero - a.orden_numero),
+        deuda_neta: listaDeuda.sort((a, b) => b.orden_numero - a.orden_numero)
+      };
+
+    } catch (error) {
+      console.error("Error obteniendo detalles financieros:", error);
+      return { gastos_netos: [], deuda_neta: [] };
+    }
   }
 }
