@@ -775,17 +775,39 @@ function AsignarTareas() {
 
         // --- CARGAR ÍTEMS MULTI-TAREA ---
         if (task.items && task.items.length > 0) {
-            const loadedItems = task.items.map(i => ({
-                uniqueId: i.id,
-                value: i.actividad?.id || i.sub_actividad?.id,
-                label: i.actividad?.nombre || i.sub_actividad?.nombre,
-                type: i.actividad ? 'ACT' : 'SUB',
-                precio_venta: i.precio_venta_unitario || i.precio_venta,
-                precio_costo: i.precio_costo_unitario || i.precio_costo,
-                cantidad_asignada: i.cantidad_asignada,
-                cantidad_real: i.cantidad_real || 0,
-                data: i.actividad || i.sub_actividad // Importante para saber si requiere material
-            }))
+            const loadedItems = task.items.map(i => {
+                // Buscar Master Data para PRECIOS
+                let masterData = null;
+                if (i.actividad_id) {
+                    masterData = actividadesData.find(a => a.id === i.actividad_id);
+                } else if (i.sub_actividad_id) {
+                    for (const act of actividadesData) {
+                        if (act.sub_actividades) {
+                            const sub = act.sub_actividades.find(s => s.id === i.sub_actividad_id);
+                            if (sub) {
+                                masterData = sub;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Fallback de precios
+                const pVenta = Number(i.precio_venta_unitario) || Number(i.precio_venta) || Number(masterData?.valor_venta) || 0;
+                const pCosto = Number(i.precio_costo_unitario) || Number(i.precio_costo) || Number(masterData?.valor_costo) || 0;
+
+                return {
+                    uniqueId: i.id || Date.now() + Math.random(),
+                    value: i.actividad?.id || i.sub_actividad?.id,
+                    label: i.actividad?.nombre || i.sub_actividad?.nombre || masterData?.nombre || 'Ítem',
+                    type: i.actividad_id ? 'ACT' : 'SUB',
+                    precio_venta: pVenta,
+                    precio_costo: pCosto,
+                    cantidad_asignada: i.cantidad_asignada,
+                    cantidad_real: i.cantidad_real || 0,
+                    data: masterData // Importante para saber si requiere material
+                };
+            })
             setTaskList(loadedItems)
         } else {
             // Fallback: Si no hay items pero sí hay actividad directa (tareas antiguas)
@@ -1363,8 +1385,8 @@ function AsignarTareas() {
                                 </div>
                             )}
 
-                            {/* Lista de actividades agregadas */}
-                            <div className="border rounded-3 overflow-hidden" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                            {/* Lista de actividades agregadas - SIN SCROLL LIMITADO */}
+                            <div className="border rounded-3 overflow-hidden">
                                 {taskList.length === 0 ? (
                                     <div className="text-center py-5">
                                         <i className="bi bi-inbox text-muted" style={{ fontSize: '3rem', opacity: 0.3 }}></i>
@@ -1373,82 +1395,118 @@ function AsignarTareas() {
                                     </div>
                                 ) : (
                                     <table className="table table-hover mb-0 align-middle">
-                                        <thead className="bg-white sticky-top" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                                        <thead className="bg-light text-secondary">
                                             <tr>
-                                                <th className="ps-3 py-3 border-0 text-muted fw-semibold" style={{ fontSize: '12px' }}>ACTIVIDAD</th>
-                                                <th className="text-center py-3 border-0 text-muted fw-semibold" style={{ width: '100px', fontSize: '12px' }}>PLAN</th>
-                                                {isExecutionPhase && <th className="text-center py-3 border-0 text-success fw-semibold" style={{ width: '100px', fontSize: '12px' }}>REAL</th>}
-                                                <th className="text-end py-3 border-0 text-muted fw-semibold" style={{ width: '110px', fontSize: '12px' }}>COSTO</th>
-                                                <th className="py-3 border-0" style={{ width: '50px' }}></th>
+                                                <th className="ps-3 py-3 border-0 fw-semibold" style={{ fontSize: '11px', letterSpacing: '0.5px' }}>ACTIVIDAD</th>
+                                                <th className="text-center py-3 border-0 fw-semibold" style={{ width: '80px', fontSize: '11px' }}>PLAN</th>
+                                                {isExecutionPhase && <th className="text-center py-3 border-0 text-success fw-semibold" style={{ width: '80px', fontSize: '11px' }}>REAL</th>}
+                                                <th className="text-end py-3 border-0 fw-semibold" style={{ width: '100px', fontSize: '11px' }}>COSTO</th>
+                                                <th className="text-end py-3 border-0 fw-semibold text-primary" style={{ width: '100px', fontSize: '11px' }}>VENTA</th>
+                                                <th className="text-end py-3 border-0 fw-semibold text-success" style={{ width: '100px', fontSize: '11px' }}>UTILIDAD</th>
+                                                <th className="py-3 border-0" style={{ width: '40px' }}></th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {taskList.map((item, idx) => (
-                                                <tr key={item.uniqueId || idx} className="border-bottom" style={{ transition: 'background 0.2s' }}>
-                                                    <td className="ps-3 py-3">
-                                                        <div className="d-flex align-items-start gap-2">
-                                                            <div className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: '32px', height: '32px' }}>
-                                                                <i className={`bi ${item.type === 'ACT' ? 'bi-layers' : 'bi-diagram-3'} text-primary`} style={{ fontSize: '14px' }}></i>
-                                                            </div>
-                                                            <div className="flex-grow-1 min-width-0">
-                                                                <div className="fw-medium text-dark" style={{ lineHeight: '1.3' }}>{item.label}</div>
-                                                                <div className="d-flex gap-2 mt-1">
-                                                                    <Badge bg="light" text="muted" className="fw-normal" style={{ fontSize: '10px' }}>
-                                                                        {item.type === 'ACT' ? 'Actividad' : 'Sub-actividad'}
-                                                                    </Badge>
-                                                                    {item.data?.requiere_material && (
-                                                                        <Badge bg="warning" text="dark" style={{ fontSize: '10px' }}>
-                                                                            <i className="bi bi-box-seam me-1"></i>Req. Material
+                                            {taskList.map((item, idx) => {
+                                                const qty = isExecutionPhase ? Number(item.cantidad_real) : Number(item.cantidad_asignada);
+                                                const costo = qty * Number(item.precio_costo);
+                                                const venta = qty * Number(item.precio_venta || 0);
+                                                const utilidad = venta - costo;
+
+                                                return (
+                                                    <tr key={item.uniqueId || idx} className="border-bottom" style={{ transition: 'background 0.2s' }}>
+                                                        <td className="ps-3 py-3">
+                                                            <div className="d-flex align-items-start gap-2">
+                                                                <div className="bg-white border rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 text-muted" style={{ width: '28px', height: '28px' }}>
+                                                                    <small>{idx + 1}</small>
+                                                                </div>
+                                                                <div className="flex-grow-1 min-width-0">
+                                                                    <div className="fw-medium text-dark small" style={{ lineHeight: '1.3' }}>{item.label}</div>
+                                                                    <div className="d-flex gap-2 mt-1">
+                                                                        <Badge bg="light" text="muted" className="fw-normal border" style={{ fontSize: '9px' }}>
+                                                                            {item.type === 'ACT' ? 'ACTIVIDAD' : 'SUB-ACTIVIDAD'}
                                                                         </Badge>
-                                                                    )}
+                                                                        {item.data?.requiere_material && (
+                                                                            <Badge bg="warning" text="dark" style={{ fontSize: '9px' }}>
+                                                                                <i className="bi bi-box-seam me-1"></i>REQ. MAT
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="text-center py-3">
-                                                        <Form.Control
-                                                            type="number"
-                                                            size="sm"
-                                                            value={item.cantidad_asignada}
-                                                            onChange={e => handleItemChange(item.uniqueId, 'cantidad_asignada', e.target.value)}
-                                                            disabled={!canEditCore}
-                                                            className="text-center border-0 bg-light rounded fw-medium"
-                                                            style={{ width: '70px', margin: '0 auto' }}
-                                                        />
-                                                    </td>
-                                                    {isExecutionPhase && (
+                                                        </td>
                                                         <td className="text-center py-3">
                                                             <Form.Control
                                                                 type="number"
                                                                 size="sm"
-                                                                value={item.cantidad_real}
-                                                                onChange={e => handleItemChange(item.uniqueId, 'cantidad_real', e.target.value)}
-                                                                className="text-center border-success bg-success bg-opacity-10 rounded fw-bold text-success"
-                                                                style={{ width: '70px', margin: '0 auto' }}
-                                                                disabled={editingTask?.estado === 'APROBADA'}
+                                                                value={item.cantidad_asignada}
+                                                                onChange={e => handleItemChange(item.uniqueId, 'cantidad_asignada', e.target.value)}
+                                                                disabled={!canEditCore}
+                                                                className="text-center border-0 bg-light rounded fw-bold text-secondary"
+                                                                style={{ width: '60px', margin: '0 auto', fontSize: '0.9rem' }}
                                                             />
                                                         </td>
-                                                    )}
-                                                    <td className="text-end py-3 pe-2">
-                                                        <span className="fw-semibold text-dark">
-                                                            ${((isExecutionPhase ? item.cantidad_real : item.cantidad_asignada) * item.precio_costo).toLocaleString()}
-                                                        </span>
-                                                    </td>
-                                                    <td className="text-center py-3">
-                                                        {canEditCore && (
-                                                            <Button
-                                                                variant="link"
-                                                                className="p-1 text-danger"
-                                                                onClick={() => handleRemoveItem(item.uniqueId)}
-                                                                title="Eliminar"
-                                                            >
-                                                                <i className="bi bi-x-circle"></i>
-                                                            </Button>
+                                                        {isExecutionPhase && (
+                                                            <td className="text-center py-3">
+                                                                <Form.Control
+                                                                    type="number"
+                                                                    size="sm"
+                                                                    value={item.cantidad_real}
+                                                                    onChange={e => handleItemChange(item.uniqueId, 'cantidad_real', e.target.value)}
+                                                                    className="text-center border-success bg-success bg-opacity-10 rounded fw-bold text-success"
+                                                                    style={{ width: '60px', margin: '0 auto', fontSize: '0.9rem' }}
+                                                                    disabled={editingTask?.estado === 'APROBADA'}
+                                                                />
+                                                            </td>
                                                         )}
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                                        <td className="text-end py-3 text-muted small font-monospace">
+                                                            ${costo.toLocaleString()}
+                                                        </td>
+                                                        <td className="text-end py-3 text-primary small font-monospace fw-medium">
+                                                            ${venta.toLocaleString()}
+                                                        </td>
+                                                        <td className="text-end py-3 small font-monospace fw-bold" style={{ color: utilidad >= 0 ? '#198754' : '#dc3545' }}>
+                                                            ${utilidad.toLocaleString()}
+                                                        </td>
+                                                        <td className="text-center py-3">
+                                                            {canEditCore && (
+                                                                <Button
+                                                                    variant="link"
+                                                                    className="p-0 text-danger opacity-50 hover-opacity-100"
+                                                                    onClick={() => handleRemoveItem(item.uniqueId)}
+                                                                    title="Eliminar"
+                                                                >
+                                                                    <i className="bi bi-x-lg small"></i>
+                                                                </Button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })}
                                         </tbody>
+                                        <tfoot className="bg-light border-top">
+                                            {(() => {
+                                                const totalCosto = taskList.reduce((acc, item) => {
+                                                    const qty = isExecutionPhase ? Number(item.cantidad_real) : Number(item.cantidad_asignada);
+                                                    return acc + (qty * Number(item.precio_costo));
+                                                }, 0);
+                                                const totalVenta = taskList.reduce((acc, item) => {
+                                                    const qty = isExecutionPhase ? Number(item.cantidad_real) : Number(item.cantidad_asignada);
+                                                    return acc + (qty * Number(item.precio_venta || 0));
+                                                }, 0);
+                                                const totalUtilidad = totalVenta - totalCosto;
+
+                                                return (
+                                                    <tr>
+                                                        <td className="text-end fw-bold text-secondary py-3 small pe-3" colSpan={isExecutionPhase ? 3 : 2}>TOTALES:</td>
+                                                        <td className="text-end fw-bold text-slate-700 py-3 small font-monospace">${totalCosto.toLocaleString()}</td>
+                                                        <td className="text-end fw-bold text-primary py-3 small font-monospace">${totalVenta.toLocaleString()}</td>
+                                                        <td className="text-end fw-bold py-3 small font-monospace" style={{ color: totalUtilidad >= 0 ? '#198754' : '#dc3545' }}>${totalUtilidad.toLocaleString()}</td>
+                                                        <td></td>
+                                                    </tr>
+                                                );
+                                            })()}
+                                        </tfoot>
                                     </table>
                                 )}
                             </div>
