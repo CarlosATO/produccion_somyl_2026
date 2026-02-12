@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Table, Spinner, ProgressBar, Alert, Modal, Row, Col, Badge } from 'react-bootstrap';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import * as XLSX from 'xlsx';
 import { tareasService } from '../../../services/tareasService';
 import { cubicacionService } from '../../../services/cubicacionService';
 
@@ -102,6 +103,10 @@ const ProduccionActividad = () => {
 
             const costo = cantReal * (item.precio_costo_unitario || 0);
 
+            // NUEVO: Calculo de Venta
+            const precioVenta = Number(item.precio_venta_unitario) || Number(item.actividad?.valor_venta) || Number(item.sub_actividad?.valor_venta) || 0;
+            const venta = cantReal * precioVenta;
+
             actividadesMap[actId].cantidad_ejecutada += cantReal;
             actividadesMap[actId].costo_ejecutado += costo;
             actividadesMap[actId].tareas_realizadas.push({
@@ -109,13 +114,19 @@ const ProduccionActividad = () => {
               cantidad: cantReal,
               precio_unitario: item.precio_costo_unitario || 0,
               costo: costo,
+              // Data Venta
+              precio_venta: precioVenta,
+              venta: venta,
+              // Data Descriptiva
               proveedor: tarea.proveedor?.nombre || 'Somyl',
               trabajador: tarea.trabajador?.nombre_completo || '-',
               zona: tarea.zona?.nombre || '-',
               tramo: tarea.tramo?.nombre || '-',
               fecha_asignacion: tarea.fecha_asignacion,
               fecha_termino: tarea.fecha_termino_real,
-              estado_ep: tarea.estado_pago?.estado || 'NO EMITIDO'
+              estado_ep: tarea.estado_pago?.estado || 'NO EMITIDO',
+              nombre_actividad: actividadesMap[actId].nombre_actividad, // Para exportar
+              unidad: actividadesMap[actId].unidad // Para exportar
             });
           }
         });
@@ -148,6 +159,91 @@ const ProduccionActividad = () => {
     return format(parseISO(fecha), 'dd/MM/yyyy HH:mm', { locale: es });
   };
 
+  // --- EXPORTAR EXCEL (AGRUPADO POR ZONA) ---
+  const handleExportExcel = () => {
+    try {
+      const ws_data = [];
+      ws_data.push(["ZONA", "ÍTEM / ACTIVIDAD", "UNIDAD", "FECHA", "CONTRATISTA / TRAB.", "CANTIDAD", "PRECIO COSTO", "TOTAL COSTO", "PRECIO VENTA", "TOTAL VENTA", "ESTADO PAGO"]);
+
+      // 1. Aplanar todas las ejecuciones de todas las actividades
+      let allExecutions = [];
+      actividadesAgrupadas.forEach(act => {
+        if (act.tareas_realizadas && act.tareas_realizadas.length > 0) {
+          // Ya agregamos nombre_actividad y unidad en el paso anterior
+          allExecutions = [...allExecutions, ...act.tareas_realizadas];
+        }
+      });
+
+      // 2. Agrupar por Zona
+      const executionsByZone = allExecutions.reduce((acc, curr) => {
+        const zonaName = curr.zona || 'SIN ZONA';
+        if (!acc[zonaName]) acc[zonaName] = [];
+        acc[zonaName].push(curr);
+        return acc;
+      }, {});
+
+      // 3. Ordenar Zonas alfabéticamente
+      const sortedZones = Object.keys(executionsByZone).sort();
+
+      let granTotalCosto = 0;
+      let granTotalVenta = 0;
+
+      sortedZones.forEach(zona => {
+        // Header de Zona
+        ws_data.push([zona.toUpperCase(), "", "", "", "", "", "", "", "", "", ""]);
+
+        const items = executionsByZone[zona];
+        // Ordenar items por fecha o nombre
+        items.sort((a, b) => new Date(a.fecha_termino) - new Date(b.fecha_termino));
+
+        let totalZonaCosto = 0;
+        let totalZonaVenta = 0;
+
+        items.forEach(item => {
+          const totalCosto = Number(item.costo) || 0;
+          const totalVenta = Number(item.venta) || 0;
+
+          ws_data.push([
+            "", // Columna Zona vacía para items
+            item.nombre_actividad,
+            item.unidad,
+            item.fecha_termino ? format(parseISO(item.fecha_termino), 'dd/MM/yyyy') : '-',
+            item.proveedor !== 'Somyl' ? item.proveedor : item.trabajador,
+            Number(item.cantidad),
+            Number(item.precio_unitario),
+            totalCosto,
+            Number(item.precio_venta),
+            totalVenta,
+            item.estado_ep
+          ]);
+
+          totalZonaCosto += totalCosto;
+          totalZonaVenta += totalVenta;
+        });
+
+        // Footer de Zona
+        ws_data.push(["TOTAL " + zona, "", "", "", "", "", "", totalZonaCosto, "", totalZonaVenta, ""]);
+        ws_data.push([]); // Espacio separador
+
+        granTotalCosto += totalZonaCosto;
+        granTotalVenta += totalZonaVenta;
+      });
+
+      // Footer General
+      ws_data.push(["TOTAL GENERAL", "", "", "", "", "", "", granTotalCosto, "", granTotalVenta, ""]);
+
+      // Generar Excel
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Produccion_Zonas");
+      XLSX.writeFile(wb, `Reporte_Produccion_Zonas_${projectId}_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+
+    } catch (error) {
+      console.error("Error exportando excel:", error);
+      setError("Error al generar el archivo Excel.");
+    }
+  };
+
   const handleVerDetalles = (actividad) => {
     setActividadSeleccionada(actividad);
     setTareasDeActividad(actividad.tareas_realizadas);
@@ -159,16 +255,25 @@ const ProduccionActividad = () => {
   return (
     <div className="container-fluid py-4 bg-light min-vh-100">
 
-      {/* HEADER */}
+      {/* TITLE & ACTIONS */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-
           <h4 className="fw-bold text-dark mb-0">Producción por Actividad</h4>
           <small className="text-muted">Detalle de todas las actividades ejecutadas (emitidas y sin emitir)</small>
         </div>
-        <Button variant="outline-success" size="sm" onClick={() => window.print()}>
-          <i className="bi bi-printer me-2"></i>Imprimir
-        </Button>
+        <div className="d-flex gap-2">
+          <Button
+            variant="success"
+            className="shadow-sm"
+            onClick={handleExportExcel}
+            disabled={loading || actividadesAgrupadas.length === 0}
+          >
+            <i className="bi bi-file-earmark-excel me-2"></i>Exportar Excel
+          </Button>
+          <Button variant="outline-danger" className="shadow-sm" onClick={() => window.print()}>
+            <i className="bi bi-file-pdf me-2"></i>PDF
+          </Button>
+        </div>
       </div>
 
       {error && <Alert variant="warning">{error}</Alert>}
