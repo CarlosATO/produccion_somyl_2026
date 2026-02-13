@@ -73,14 +73,15 @@ export default function FinanceDashboard({ projectId }) {
             const subcontratistasIds = new Set();
             let totalCostoMO_Pendiente = 0; // Sin EP o Borrador
 
-            // CALCULAR VENTA CUBICADA REAL (Solo Zonas, ignorar globales legacy)
+            // CALCULAR VENTA CUBICADA REAL (Solo Zonas VÁLIDAS)
             let totalCubicadoCalculado = 0;
             const mapaVentaPorZona = {};
+            const zonasIdsValidas = new Set(zonas.map(z => z.id)); // Set para búsqueda rápida
 
             if (cubicaciones && cubicaciones.length > 0) {
                 cubicaciones.forEach(c => {
-                    // Si no tiene zona, lo ignoramos (residuo de lógica anterior)
-                    if (!c.zona_id) return;
+                    // Si no tiene zona O la zona no existe en la lista actual, lo ignoramos
+                    if (!c.zona_id || !zonasIdsValidas.has(c.zona_id)) return;
 
                     const cant = Number(c.cantidad) || 0;
                     const precio = Number(c.actividad?.valor_venta || c.sub_actividad?.valor_venta || 0);
