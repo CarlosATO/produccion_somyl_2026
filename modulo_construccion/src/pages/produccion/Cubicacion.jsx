@@ -132,7 +132,7 @@ function Cubicacion() {
     } catch (err) { console.error("Error saving total", err) }
   }
 
-  // Guardar ZONA -> Ajusta el Global para mantener Total fijo
+  // Guardar ZONA -> Ajusta el Global para mantener Total fijo (o crecer)
   const handleSaveCell = async (val, zonaId, item, type) => {
     const nuevaCantidad = Number(val) || 0
     const cantidadAnterior = getCantidad(zonaId, item.id, type)
@@ -140,8 +140,47 @@ function Cubicacion() {
 
     if (diff === 0) return
 
+    // 1. CÁLCULO OPTIMISTA (Actualizar UI inmediatamente)
+    const globalActual = getCantidad(null, item.id, type)
+    const globalNuevo = Math.max(0, globalActual - diff) // Prevent negative global
+
+    const newCubsState = [...cubicaciones]
+
+    // A. Actualizar ZONA en estado local
+    const idxZona = newCubsState.findIndex(c => c.zona_id === zonaId && (type === 'ACT' ? c.actividad_id === item.id : c.sub_actividad_id === item.id))
+    if (idxZona >= 0) {
+      newCubsState[idxZona] = { ...newCubsState[idxZona], cantidad: nuevaCantidad }
+    } else {
+      // Si no existía, simular creación (aunque falte ID real, sirve para display)
+      newCubsState.push({
+        id: `temp-${Date.now()}`,
+        proyecto_id: Number(projectId),
+        zona_id: zonaId,
+        actividad_id: type === 'ACT' ? item.id : null,
+        sub_actividad_id: type === 'SUB' ? item.id : null,
+        cantidad: nuevaCantidad
+      })
+    }
+
+    // B. Actualizar GLOBAL en estado local
+    const idxGlobal = newCubsState.findIndex(c => c.zona_id === null && (type === 'ACT' ? c.actividad_id === item.id : c.sub_actividad_id === item.id))
+    if (idxGlobal >= 0) {
+      newCubsState[idxGlobal] = { ...newCubsState[idxGlobal], cantidad: globalNuevo }
+    } else {
+      newCubsState.push({
+        id: `temp-global-${Date.now()}`,
+        proyecto_id: Number(projectId),
+        zona_id: null,
+        actividad_id: type === 'ACT' ? item.id : null,
+        sub_actividad_id: type === 'SUB' ? item.id : null,
+        cantidad: globalNuevo
+      })
+    }
+
+    setCubicaciones(newCubsState) // UPDATE UI NOW
+
+    // 2. PERSISTENCIA (Segundo plano)
     try {
-      // 1. Guardar Zona
       const payloadZona = {
         proyecto_id: Number(projectId),
         zona_id: zonaId,
@@ -151,12 +190,6 @@ function Cubicacion() {
       else payloadZona.sub_actividad_id = item.id
 
       await cubicacionService.guardarCubicacion(payloadZona)
-
-      // 2. Ajustar Global (Descuento)
-      const globalActual = getCantidad(null, item.id, type)
-      // Si aumentamos zona, bajamos global. Si bajamos zona, aumentamos global.
-      // Pero el global NUNCA debe ser negativo. Si se acaba, se queda en 0 (y el Total sube).
-      const globalNuevo = Math.max(0, globalActual - diff)
 
       const payloadGlobal = {
         proyecto_id: Number(projectId),
@@ -168,9 +201,15 @@ function Cubicacion() {
 
       await cubicacionService.guardarCubicacionGlobal(payloadGlobal)
 
-      const newCubs = await cubicacionService.getCubicaciones(projectId)
-      setCubicaciones(newCubs)
-    } catch (err) { console.error("Error saving cell", err) }
+      // Opcional: Recargar en background para consistencia final de IDs
+      const finalCubs = await cubicacionService.getCubicaciones(projectId)
+      setCubicaciones(finalCubs)
+
+    } catch (err) {
+      console.error("Error saving cell", err)
+      alert("Error al guardar. Recargando...") // Fallback
+      loadAllData()
+    }
   }
 
   const getTotalFila = (itemId, type) => {
