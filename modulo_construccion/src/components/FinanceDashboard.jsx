@@ -84,7 +84,7 @@ export default function FinanceDashboard({ projectId }) {
                     const totalLinea = cant * precio;
 
                     // Acumular por Zona (o Global)
-                    if (totalLinea > 0) {
+                    if (totalLinea !== 0) {
                         const zId = c.zona_id || ZONA_GLOBAL_KEY;
                         mapaVentaPorZona[zId] = (mapaVentaPorZona[zId] || 0) + totalLinea;
                     }
@@ -96,10 +96,10 @@ export default function FinanceDashboard({ projectId }) {
                 id: z.id,
                 nombre: z.nombre,
                 total: mapaVentaPorZona[z.id] || 0
-            })).filter(z => z.total > 0);
+            })).filter(z => z.total !== 0);
 
             // Agregar Global si existe
-            if (mapaVentaPorZona[ZONA_GLOBAL_KEY] > 0) {
+            if (mapaVentaPorZona[ZONA_GLOBAL_KEY] && mapaVentaPorZona[ZONA_GLOBAL_KEY] !== 0) {
                 listaVentaPorZona.push({
                     id: ZONA_GLOBAL_KEY,
                     nombre: 'Global / Sin Zona',
