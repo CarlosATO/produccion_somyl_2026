@@ -113,7 +113,9 @@ function Cubicacion() {
   const handleSaveTotal = async (val, item, type) => {
     const nuevoTotal = Number(val) || 0
     const sumaZonas = getSumaZonas(item.id, type)
-    const nuevoGlobal = nuevoTotal - sumaZonas
+    // El Global es la diferencia. Si (nuevoTotal < sumaZonas), el Global sería negativo.
+    // Forzamos a 0 para que el Total nunca sea menor a la suma real de zonas.
+    const nuevoGlobal = Math.max(0, nuevoTotal - sumaZonas)
 
     try {
       const payload = {
@@ -152,7 +154,9 @@ function Cubicacion() {
 
       // 2. Ajustar Global (Descuento)
       const globalActual = getCantidad(null, item.id, type)
-      const globalNuevo = globalActual - diff
+      // Si aumentamos zona, bajamos global. Si bajamos zona, aumentamos global.
+      // Pero el global NUNCA debe ser negativo. Si se acaba, se queda en 0 (y el Total sube).
+      const globalNuevo = Math.max(0, globalActual - diff)
 
       const payloadGlobal = {
         proyecto_id: Number(projectId),
