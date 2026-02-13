@@ -76,15 +76,15 @@ export default function FinanceDashboard({ projectId }) {
             // CALCULAR VENTA CUBICADA REAL (Solo Zonas VÁLIDAS)
             let totalCubicadoCalculado = 0;
             const mapaVentaPorZona = {};
-            const zonasIdsValidas = new Set(zonas.map(z => z.id)); // Set para búsqueda rápida
+            const zonasIdsValidas = new Set(zonas.map(z => z.id));
 
             if (cubicaciones && cubicaciones.length > 0) {
                 cubicaciones.forEach(c => {
-                    // Si no tiene zona O la zona no existe en la lista actual, lo ignoramos
                     if (!c.zona_id || !zonasIdsValidas.has(c.zona_id)) return;
 
                     const cant = Number(c.cantidad) || 0;
-                    const precio = Number(c.actividad?.valor_venta || c.sub_actividad?.valor_venta || 0);
+                    // Resolver precio priorizando sub_actividad si existe
+                    const precio = Number(c.sub_actividad_id ? c.sub_actividad?.valor_venta : c.actividad?.valor_venta) || 0;
                     const totalLinea = cant * precio;
 
                     if (totalLinea !== 0) {
@@ -93,9 +93,6 @@ export default function FinanceDashboard({ projectId }) {
                     }
                 });
             }
-
-            // Actualizar KPI con el cálculo limpio
-            setKpis(prev => ({ ...prev, venta_cubicada: totalCubicadoCalculado }));
 
             // Preparar Datos para Modal Venta Cubicada
             const listaVentaPorZona = zonas.map(z => ({
@@ -203,7 +200,7 @@ export default function FinanceDashboard({ projectId }) {
                 margen: k.margen || 0,
                 gasto_realizado_neto: k.gasto_neto || 0, // Correcto (OP + Gastos Directos Netos)
                 deuda_pendiente_neto: k.deuda_neto || 0,
-                venta_cubicada: k.venta_cubicada || 0
+                venta_cubicada: totalCubicadoCalculado // Fuente de verdad: Suma de lo ingresado en Matriz
             });
 
             // 5. Preparar Datos Gráfico Barras (Top Proveedores)
