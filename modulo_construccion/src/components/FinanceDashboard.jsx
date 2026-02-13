@@ -530,109 +530,118 @@ export default function FinanceDashboard({ projectId }) {
             <DetailModal />
 
             {/* 1. KPIs ROW */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
 
                 {/* NUEVO: VENTA CUBICADA */}
                 <div
                     onDoubleClick={() => setShowModalVenta(true)}
-                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all cursor-pointer select-none"
+                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all cursor-pointer select-none h-full flex flex-col justify-between"
                     title="Doble Clic para Ver Detalle por Zona"
                 >
-                    <div className="flex justify-between items-start mb-1">
-                        <div className="p-1.5 bg-cyan-50 text-cyan-600 rounded-lg"><DollarSign size={18} /></div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Venta Cubicada</span>
+                    <div>
+                        <div className="flex justify-between items-start mb-1">
+                            <div className="p-1 bg-cyan-50 text-cyan-600 rounded-lg"><DollarSign size={16} /></div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide text-right flex-1 ml-2">Venta Cubicada</span>
+                        </div>
+                        <div className="text-lg font-bold text-slate-800 truncate" title={formatMoney(kpis.venta_cubicada)}>{formatMoney(kpis.venta_cubicada)}</div>
                     </div>
-                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.venta_cubicada)}</div>
-                    <div className="text-[10px] text-cyan-500 mt-0.5 font-bold">Presupuesto Inicial</div>
+                    <div className="text-[9px] text-cyan-500 mt-1 font-bold">Presupuesto Inicial</div>
                 </div>
 
                 {/* NUEVO: SALDO POR EJECUTAR (Clickable) */}
                 <div
                     onDoubleClick={() => { setZonaSeleccionada(null); setShowModalPendiente(true); }}
-                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all cursor-pointer select-none group"
+                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all cursor-pointer select-none group h-full flex flex-col justify-between"
                     title="Doble Clic para Ver Desglose"
                 >
-                    <div className="flex justify-between items-start mb-1">
-                        <div className="p-1.5 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-100 transition-colors"><ClipboardList size={18} /></div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Saldo por Ejecutar</span>
+                    <div>
+                        <div className="flex justify-between items-start mb-1">
+                            <div className="p-1 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-100 transition-colors"><ClipboardList size={16} /></div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide text-right flex-1 ml-2">Saldo x Ejecutar</span>
+                        </div>
+                        <div className="text-lg font-bold text-slate-800 truncate" title={formatMoney(kpis.venta_cubicada - kpis.ingresos)}>{formatMoney(kpis.venta_cubicada - kpis.ingresos)}</div>
                     </div>
-                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.venta_cubicada - kpis.ingresos)}</div>
-                    <div className="text-[10px] text-orange-400 mt-0.5 font-bold">Venta Cubicada - Producción</div>
+                    <div className="text-[9px] text-orange-400 mt-1 font-bold truncate">Venta - Producción</div>
                 </div>
 
                 {/* INGRESOS (Clickable) */}
                 <div
                     onClick={() => handleCardClick('ingresos')}
-                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group"
+                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group h-full flex flex-col justify-between"
                 >
-                    <div className="flex justify-between items-start mb-1">
-                        <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors"><DollarSign size={18} /></div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide group-hover:text-blue-600 transition-colors">Ingresos Totales</span>
+                    <div>
+                        <div className="flex justify-between items-start mb-1">
+                            <div className="p-1 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-100 transition-colors"><DollarSign size={16} /></div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide text-right flex-1 ml-2 group-hover:text-blue-600 transition-colors">Ingresos Totales</span>
+                        </div>
+                        <div className="text-lg font-bold text-slate-800 truncate" title={formatMoney(kpis.ingresos)}>{formatMoney(kpis.ingresos)}</div>
                     </div>
-                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.ingresos)}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">Producción Valorizada</div>
+                    <div className="text-[9px] text-slate-400 mt-1 truncate">Producción Valorizada</div>
                 </div>
 
                 {/* COSTOS MO (Sin Click) */}
-                <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-1">
-                        <div className="p-1.5 bg-red-50 text-red-600 rounded-lg"><TrendingDown size={18} /></div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Costo Mano Obra</span>
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 h-full flex flex-col justify-between">
+                    <div>
+                        <div className="flex justify-between items-start mb-1">
+                            <div className="p-1 bg-red-50 text-red-600 rounded-lg"><TrendingDown size={16} /></div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide text-right flex-1 ml-2">Costo Mano Obra</span>
+                        </div>
+                        {/* Monto Principal: PENDIENTE */}
+                        <div className="text-lg font-bold text-slate-800 truncate" title="Monto Pendiente de Pago">
+                            {formatMoney(kpis.costos_mo)}
+                        </div>
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Sin Estado de Pago</div>
                     </div>
-                    {/* Monto Principal: PENDIENTE */}
-                    <div className="text-xl font-bold text-slate-800" title="Monto Pendiente de Pago">
-                        {formatMoney(kpis.costos_mo)}
-                    </div>
-                    {/* Subtítulo: PENDIENTE */}
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Sin Estado de Pago</div>
 
                     {/* Subtítulo: TOTAL REALIZADO */}
-                    <div className="text-[10px] text-red-400 mt-0.5 pt-2 border-t border-slate-100">
-                        Total Realizado: {formatMoney(kpis.costos_mo_total || 0)}
+                    <div className="text-[9px] text-red-400 mt-1 pt-1 border-t border-slate-100 truncate">
+                        Total: {formatMoney(kpis.costos_mo_total || 0)}
                     </div>
                 </div>
 
                 {/* NUEVO: GASTO REALIZADO (NETO) + DEUDA (Clickable) */}
                 <div
                     onClick={() => handleCardClick('neto')}
-                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group relative overflow-hidden"
+                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all group relative overflow-hidden h-full flex flex-col justify-between"
                 >
-                    <div className="flex justify-between items-start mb-1">
-                        <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-100 transition-colors"><Wallet size={18} /></div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide group-hover:text-purple-600 transition-colors">Gasto Realizado (Neto)</span>
+                    <div>
+                        <div className="flex justify-between items-start mb-1">
+                            <div className="p-1 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-100 transition-colors"><Wallet size={16} /></div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide text-right flex-1 ml-2 group-hover:text-purple-600 transition-colors">Gasto Neto</span>
+                        </div>
+                        <div className="text-lg font-bold text-slate-800 truncate" title={formatMoney(kpis.gasto_realizado_neto || 0)}>{formatMoney(kpis.gasto_realizado_neto || 0)}</div>
+                        <div className="text-[9px] text-purple-400 mt-0.5">Órdenes de Pago</div>
                     </div>
-                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.gasto_realizado_neto || 0)}</div>
-                    <div className="text-[10px] text-purple-400 mt-0.5 mb-2">Órdenes de Pago</div>
 
                     {/* Sección Por Pagar (Mini) */}
                     <div
                         onClick={(e) => { e.stopPropagation(); handleCardClick('deuda'); }}
-                        className="pt-2 border-t border-slate-100 flex items-center justify-between hover:bg-slate-50 transition-colors rounded px-1 -mx-1"
+                        className="pt-1 border-t border-slate-100 flex items-center justify-between hover:bg-slate-50 transition-colors rounded px-1 -mx-1 mt-1"
                         title="Ver detalle deuda pendiente"
                     >
                         <div className="flex items-center gap-1">
-                            <AlertCircle size={12} className="text-pink-400" />
-                            <span className="text-[10px] font-bold text-slate-400 uppercase">Por Pagar:</span>
+                            <AlertCircle size={10} className="text-pink-400" />
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Por Pagar:</span>
                         </div>
-                        <span className="text-xs font-bold text-pink-500">{formatMoney(kpis.deuda_pendiente_neto || 0)}</span>
+                        <span className="text-[10px] font-bold text-pink-500 truncate">{formatMoney(kpis.deuda_pendiente_neto || 0)}</span>
                     </div>
                 </div>
 
-
-
                 {/* UTILIDAD (Sin Click) */}
-                <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden">
-                    <div className={`absolute right-0 top-0 w-1.5 h-full ${kpis.utilidad >= 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                    <div className="flex justify-between items-start mb-1">
-                        <div className={`p-1.5 rounded-lg ${kpis.utilidad >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                            <TrendingUp size={18} />
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden h-full flex flex-col justify-between">
+                    <div className={`absolute right-0 top-0 w-1 h-full ${kpis.utilidad >= 0 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <div>
+                        <div className="flex justify-between items-start mb-1">
+                            <div className={`p-1 rounded-lg ${kpis.utilidad >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                <TrendingUp size={16} />
+                            </div>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide text-right flex-1 ml-2">Utilidad Neta</span>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Utilidad Neta</span>
+                        <div className={`text-lg font-bold ${kpis.utilidad >= 0 ? 'text-green-700' : 'text-red-700'} truncate`} title={formatMoney(kpis.utilidad)}>
+                            {formatMoney(kpis.utilidad)}
+                        </div>
                     </div>
-                    <div className={`text-xl font-bold ${kpis.utilidad >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                        {formatMoney(kpis.utilidad)}
-                    </div>
-                    <div className="text-[10px] font-bold text-slate-500 mt-0.5">
+                    <div className="text-[9px] font-bold text-slate-500 mt-1">
                         Margen: {kpis.margen.toFixed(1)}%
                     </div>
                 </div>
