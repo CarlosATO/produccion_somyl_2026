@@ -268,7 +268,7 @@ function Cubicacion() {
   const COL_WIDTHS = {
     ITEM: 280,
     PRECIO: 80,
-    TOTAL: 90
+    TOTAL: 140
   };
 
   // Estilo base para celdas del BODY (columnas fijas)
