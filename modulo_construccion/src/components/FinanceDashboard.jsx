@@ -73,23 +73,28 @@ export default function FinanceDashboard({ projectId }) {
             const subcontratistasIds = new Set();
             let totalCostoMO_Pendiente = 0; // Sin EP o Borrador
 
-            // CALCULAR VENTA CUBICADA REAL (Desde Matriz) y DESGLOSAR POR ZONA (Para Modal)
-            const mapaVentaPorZona = {}; // ZonaID -> Total
-            const ZONA_GLOBAL_KEY = 'GLOBAL';
+            // CALCULAR VENTA CUBICADA REAL (Solo Zonas, ignorar globales legacy)
+            let totalCubicadoCalculado = 0;
+            const mapaVentaPorZona = {};
 
             if (cubicaciones && cubicaciones.length > 0) {
                 cubicaciones.forEach(c => {
+                    // Si no tiene zona, lo ignoramos (residuo de lógica anterior)
+                    if (!c.zona_id) return;
+
                     const cant = Number(c.cantidad) || 0;
                     const precio = Number(c.actividad?.valor_venta || c.sub_actividad?.valor_venta || 0);
                     const totalLinea = cant * precio;
 
-                    // Acumular por Zona (o Global)
                     if (totalLinea !== 0) {
-                        const zId = c.zona_id || ZONA_GLOBAL_KEY;
-                        mapaVentaPorZona[zId] = (mapaVentaPorZona[zId] || 0) + totalLinea;
+                        totalCubicadoCalculado += totalLinea;
+                        mapaVentaPorZona[c.zona_id] = (mapaVentaPorZona[c.zona_id] || 0) + totalLinea;
                     }
                 });
             }
+
+            // Actualizar KPI con el cálculo limpio
+            setKpis(prev => ({ ...prev, venta_cubicada: totalCubicadoCalculado }));
 
             // Preparar Datos para Modal Venta Cubicada
             const listaVentaPorZona = zonas.map(z => ({
@@ -97,15 +102,6 @@ export default function FinanceDashboard({ projectId }) {
                 nombre: z.nombre,
                 total: mapaVentaPorZona[z.id] || 0
             })).filter(z => z.total !== 0);
-
-            // Agregar Global si existe
-            if (mapaVentaPorZona[ZONA_GLOBAL_KEY] && mapaVentaPorZona[ZONA_GLOBAL_KEY] !== 0) {
-                listaVentaPorZona.push({
-                    id: ZONA_GLOBAL_KEY,
-                    nombre: 'Global / Sin Zona',
-                    total: mapaVentaPorZona[ZONA_GLOBAL_KEY]
-                });
-            }
 
             listaVentaPorZona.sort((a, b) => b.total - a.total);
             setDetalleVentaData(listaVentaPorZona);
