@@ -19,12 +19,12 @@ export const tareasService = {
       `)
       .eq('proyecto_id', proyectoId)
       .order('position', { ascending: true })
-    
+
     if (error) {
       console.error('Error en getTareas:', error)
       throw error
     }
-    
+
     // Cargar items para cada tarea
     if (data && data.length > 0) {
       const tareaIds = data.map(t => t.id)
@@ -36,7 +36,7 @@ export const tareasService = {
           sub_actividad:prod_sub_actividades(id, nombre, unidad, clasificacion, requiere_material, valor_venta)
         `)
         .in('tarea_id', tareaIds)
-      
+
       if (!itemsError && itemsData) {
         // Agrupar items por tarea_id
         const itemsByTarea = {}
@@ -50,7 +50,7 @@ export const tareasService = {
         })
       }
     }
-    
+
     return data || []
   },
 
@@ -63,22 +63,22 @@ export const tareasService = {
       .insert(tareaConPos)
       .select()
       .single()
-    
+
     if (tareaError) throw tareaError
 
     // 2. Crear Ítems
     if (itemsPayload && itemsPayload.length > 0) {
-        const itemsToInsert = itemsPayload.map(item => ({
-            tarea_id: tareaData.id,
-            actividad_id: item.actividad_id || null,
-            sub_actividad_id: item.sub_actividad_id || null,
-            cantidad_asignada: item.cantidad_asignada,
-            cantidad_real: 0, // Al crear parte en 0
-            precio_costo_unitario: item.precio_costo,
-            precio_venta_unitario: item.precio_venta
-        }))
-        const { error: itemsError } = await supabase.from('prod_tarea_items').insert(itemsToInsert)
-        if (itemsError) throw itemsError // Ojo: Si falla aquí, quedaría la cabecera sola (podrías borrarla)
+      const itemsToInsert = itemsPayload.map(item => ({
+        tarea_id: tareaData.id,
+        actividad_id: item.actividad_id || null,
+        sub_actividad_id: item.sub_actividad_id || null,
+        cantidad_asignada: item.cantidad_asignada,
+        cantidad_real: 0, // Al crear parte en 0
+        precio_costo_unitario: item.precio_costo,
+        precio_venta_unitario: item.precio_venta
+      }))
+      const { error: itemsError } = await supabase.from('prod_tarea_items').insert(itemsToInsert)
+      if (itemsError) throw itemsError // Ojo: Si falla aquí, quedaría la cabecera sola (podrías borrarla)
     }
 
     return tareaData
@@ -89,7 +89,7 @@ export const tareasService = {
     // 1. Actualizar Cabecera
     const { data, error } = await supabase
       .from('prod_tareas')
-      .update(tareaPayload)
+      .update({ ...tareaPayload, updated_at: new Date() })
       .eq('id', id)
       .select()
       .single()
@@ -97,22 +97,22 @@ export const tareasService = {
 
     // 2. Actualizar Ítems (Solo si viene payload de items, si es null no tocamos)
     if (itemsPayload) {
-        // A. Borrar anteriores
-        await supabase.from('prod_tarea_items').delete().eq('tarea_id', id)
-        
-        // B. Insertar nuevos
-        if (itemsPayload.length > 0) {
-            const itemsToInsert = itemsPayload.map(item => ({
-                tarea_id: id,
-                actividad_id: item.actividad_id || null,
-                sub_actividad_id: item.sub_actividad_id || null,
-                cantidad_asignada: item.cantidad_asignada,
-                cantidad_real: item.cantidad_real || 0,
-                precio_costo_unitario: item.precio_costo,
-                precio_venta_unitario: item.precio_venta
-            }))
-            await supabase.from('prod_tarea_items').insert(itemsToInsert)
-        }
+      // A. Borrar anteriores
+      await supabase.from('prod_tarea_items').delete().eq('tarea_id', id)
+
+      // B. Insertar nuevos
+      if (itemsPayload.length > 0) {
+        const itemsToInsert = itemsPayload.map(item => ({
+          tarea_id: id,
+          actividad_id: item.actividad_id || null,
+          sub_actividad_id: item.sub_actividad_id || null,
+          cantidad_asignada: item.cantidad_asignada,
+          cantidad_real: item.cantidad_real || 0,
+          precio_costo_unitario: item.precio_costo,
+          precio_venta_unitario: item.precio_venta
+        }))
+        await supabase.from('prod_tarea_items').insert(itemsToInsert)
+      }
     }
     return data
   },
@@ -120,7 +120,7 @@ export const tareasService = {
   async actualizarEstado(id, nuevoEstado, datosAdicionales = {}) {
     const { data, error } = await supabase
       .from('prod_tareas')
-      .update({ estado: nuevoEstado, ...datosAdicionales })
+      .update({ estado: nuevoEstado, updated_at: new Date(), ...datosAdicionales })
       .eq('id', id)
       .select()
       .single()
@@ -136,13 +136,13 @@ export const tareasService = {
         .from('prod_tarea_items')
         .update({ cantidad_real: 0 })
         .eq('tarea_id', tareaId)
-      
+
       // 2. Eliminar consumos de materiales asociados a esta tarea
       await supabase
         .from('prod_consumos')
         .delete()
         .eq('tarea_id', tareaId)
-      
+
       console.log(`✅ Ejecución reseteada para tarea ${tareaId}`)
       return true
     } catch (error) {
@@ -165,7 +165,7 @@ export const tareasService = {
       `)
       .eq('estado_pago_id', estadoPagoId)
       .order('id', { ascending: true })
-    
+
     if (error) {
       console.error('Error en getTareasPorEP:', error)
       throw error
@@ -182,7 +182,7 @@ export const tareasService = {
           sub_actividad:prod_sub_actividades(id, nombre, unidad, valor_venta)
         `)
         .in('tarea_id', tareaIds)
-      
+
       if (!itemsError && itemsData) {
         const itemsByTarea = {}
         itemsData.forEach(item => {
@@ -194,7 +194,7 @@ export const tareasService = {
         })
       }
     }
-    
+
     return data || []
   },
 
@@ -202,5 +202,20 @@ export const tareasService = {
     const { error } = await supabase.from('prod_tareas').delete().eq('id', id)
     if (error) throw error
     return true
+  },
+
+  // Obtener tareas por estado (para alertas)
+  async getTareasPorEstado(proyectoId, estado) {
+    const { data, error } = await supabase
+      .from('prod_tareas')
+      .select('id, updated_at, estado, proveedor:proveedores(nombre)')
+      .eq('proyecto_id', proyectoId)
+      .eq('estado', estado)
+
+    if (error) {
+      console.error('Error getTareasPorEstado:', error)
+      return []
+    }
+    return data || []
   }
 }

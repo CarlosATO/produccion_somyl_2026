@@ -8,8 +8,12 @@ import {
   Menu,
   X,
   Building2,
-  TrendingUp
+  TrendingUp,
+  Bell,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
+import { tareasService } from '../services/tareasService';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -45,6 +49,56 @@ export default function Navbar() {
     }
   }, [location.pathname]);
 
+  // --- GLOBAL ALERT LOGIC ---
+  const [staleTasks, setStaleTasks] = useState([]);
+
+  const checkStaleTasks = async () => {
+    if (!currentProject) return;
+    try {
+      const tasks = await tareasService.getTareasPorEstado(currentProject.id, 'APROBADA');
+      const now = new Date();
+      /* 
+         Umbral: 12 horas.
+         Si updated_at es anterior a (now - 12h), es stale.
+      */
+      const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+
+      const stale = tasks.filter(t => {
+        const lastUpdate = new Date(t.updated_at); // Supabase devuelve ISO string
+        return lastUpdate < twelveHoursAgo;
+      });
+
+      setStaleTasks(stale);
+    } catch (e) {
+      console.error("Error checking stale tasks", e);
+    }
+  };
+
+  useEffect(() => {
+    // 1. Check initial
+    if (currentProject) checkStaleTasks();
+
+    // 2. Interval Check (every 5 min)
+    const interval = setInterval(() => {
+      if (currentProject) checkStaleTasks();
+    }, 5 * 60 * 1000);
+
+    // 3. Listen for global events
+    const handleUpdate = () => {
+      // Delay slighty to allow DB propagation
+      setTimeout(() => {
+        if (currentProject) checkStaleTasks();
+      }, 500);
+    };
+
+    window.addEventListener('kanban-updated', handleUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('kanban-updated', handleUpdate);
+    };
+  }, [currentProject]);
+
   return (
     <nav className="bg-slate-900 text-white shadow-md fixed top-0 w-full z-50 transition-all duration-300 h-14">
       <div className="max-w-7xl mx-auto px-4 sm:px-4 lg:px-6 h-full">
@@ -75,6 +129,16 @@ export default function Navbar() {
               </div>
             )}
           </div>
+
+          {/* CENTER: ALERTS */}
+          {staleTasks.length > 0 && (
+            <div className="hidden md:flex items-center gap-2 bg-red-500/10 border border-red-500/50 rounded-lg px-3 py-1 animate-pulse">
+              <AlertTriangle size={16} className="text-red-400" />
+              <span className="text-xs font-bold text-red-200">
+                {staleTasks.length} {staleTasks.length === 1 ? 'tarea' : 'tareas'} por validar ({'>'}12h)
+              </span>
+            </div>
+          )}
 
           {/* RIGHT: USER PROFILE */}
           <div className="hidden md:flex items-center gap-3">

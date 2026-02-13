@@ -522,6 +522,8 @@ function AsignarTareas() {
 
             setShowModal(false)
             loadInitialData()
+            // Notificar cambios globales (Navbar alert)
+            window.dispatchEvent(new CustomEvent('kanban-updated'));
         } catch (err) { alert('Error guardando'); console.error(err) }
         finally { setUploading(false) }
     }
@@ -688,6 +690,9 @@ function AsignarTareas() {
 
             // 🔥 Recargamos los EPs para ver si alguno se creó o se borró
             try { await refreshEPs() } catch (e) { /* no bloquear */ }
+
+            // Notificar cambio global
+            window.dispatchEvent(new CustomEvent('kanban-updated'));
         } catch (err) { console.error("Error movimiento", err); loadInitialData() }
     }
 
@@ -711,6 +716,7 @@ function AsignarTareas() {
             const t = await tareasService.getTareas(projectId);
             setTareas(t);
             await refreshEPs(); // 🔥 Actualiza la columna de EPs
+            window.dispatchEvent(new CustomEvent('kanban-updated'));
         } catch (err) { alert('Error') }
     }
 
@@ -960,6 +966,7 @@ function AsignarTareas() {
             alert("Tarea restaurada correctamente.")
             loadInitialData()
             setViewMode('kanban') // Volvemos al tablero para verla
+            window.dispatchEvent(new CustomEvent('kanban-updated'));
         } catch (err) { alert("Error al restaurar"); console.error(err) }
     }
 
@@ -974,6 +981,7 @@ function AsignarTareas() {
             })
             alert("Tarea finalizada y archivada correctamente.")
             loadInitialData()
+            window.dispatchEvent(new CustomEvent('kanban-updated'));
         } catch (err) { alert("Error al finalizar"); console.error(err) }
     }
 

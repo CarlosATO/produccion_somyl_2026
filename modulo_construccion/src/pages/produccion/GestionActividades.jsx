@@ -236,6 +236,7 @@ function GestionActividades() {
               <th className="border-0 py-2 text-center text-secondary small">UNIDAD</th>
               <th className="border-0 py-2 text-end text-secondary small">PRECIO VENTA</th>
               <th className="border-0 py-2 text-center text-secondary small">REQ. MAT.</th>
+              <th className="border-0 py-2 text-end text-secondary small">COSTO SUBCONTRATO</th>
               <th className="border-0 py-2 text-end pe-3 text-secondary small">ACCIONES</th>
             </tr>
           </thead>
@@ -262,6 +263,12 @@ function GestionActividades() {
                       <i className="bi bi-box-seam-fill text-primary" title="Requiere Materiales"></i> :
                       <span className="text-muted opacity-25"><i className="bi bi-dash-lg"></i></span>
                     }
+                  </td>
+                  <td className="text-end py-1.5 fw-bold text-secondary" style={{ fontSize: '0.85rem' }}>
+                    {(() => {
+                      const max = act.tarifas?.length ? Math.max(...act.tarifas.map(t => t.valor_costo)) : 0;
+                      return `$${max.toLocaleString()}`;
+                    })()}
                   </td>
                   <td className="text-end pe-3 py-1.5">
                     <div className="d-flex justify-content-end gap-1">
@@ -295,6 +302,12 @@ function GestionActividades() {
                         <i className="bi bi-box-seam-fill text-primary small" title="Requiere Materiales"></i> :
                         ''
                       }
+                    </td>
+                    <td className="text-end small font-monospace text-secondary">
+                      {(() => {
+                        const max = sub.tarifas?.length ? Math.max(...sub.tarifas.map(t => t.valor_costo)) : 0;
+                        return `$${max.toLocaleString()}`;
+                      })()}
                     </td>
                     <td className="text-end pe-4">
                       <div className="d-flex justify-content-end gap-1">

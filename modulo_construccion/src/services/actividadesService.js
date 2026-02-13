@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient'
 
 export const actividadesService = {
-  
+
   // --- ACTIVIDADES (PADRES) ---
 
   async getActividades(proyectoId) {
@@ -9,8 +9,10 @@ export const actividadesService = {
       .from('prod_actividades')
       .select(`
         *,
+        tarifas:prod_tarifas(valor_costo),
         sub_actividades:prod_sub_actividades (
-          *
+          *,
+          tarifas:prod_tarifas(valor_costo)
         )
       `)
       .eq('proyecto_id', proyectoId)
@@ -48,7 +50,7 @@ export const actividadesService = {
       .from('prod_actividades')
       .delete()
       .eq('id', id)
-    
+
     if (error) {
       if (error.code === '23503') throw new Error("No se puede eliminar: Tiene registros asociados.")
       throw error
@@ -105,37 +107,37 @@ export const actividadesService = {
     } else {
       query = query.eq('sub_actividad_id', itemId)
     }
-    
+
     const { data, error } = await query
     if (error) throw error
     return data
   },
 
   async guardarTarifa(payload) {
-    if (payload.actividad_id) delete payload.sub_actividad_id 
+    if (payload.actividad_id) delete payload.sub_actividad_id
     else delete payload.actividad_id
 
     const { data, error } = await supabase
       .from('prod_tarifas')
-      .insert(payload) 
+      .insert(payload)
       .select()
-    
+
     if (error) throw error
     return data
   },
-  
-  async setTarifaSegura(payload) {
-     const match = { 
-        proyecto_id: payload.proyecto_id, 
-        proveedor_id: payload.proveedor_id 
-     }
-     if(payload.actividad_id) match.actividad_id = payload.actividad_id
-     else match.sub_actividad_id = payload.sub_actividad_id
 
-     // 1. Borrar anterior (si existe)
-     await supabase.from('prod_tarifas').delete().match(match)
-     
-     // 2. Insertar nueva
-     return await this.guardarTarifa(payload)
+  async setTarifaSegura(payload) {
+    const match = {
+      proyecto_id: payload.proyecto_id,
+      proveedor_id: payload.proveedor_id
+    }
+    if (payload.actividad_id) match.actividad_id = payload.actividad_id
+    else match.sub_actividad_id = payload.sub_actividad_id
+
+    // 1. Borrar anterior (si existe)
+    await supabase.from('prod_tarifas').delete().match(match)
+
+    // 2. Insertar nueva
+    return await this.guardarTarifa(payload)
   }
 }
