@@ -110,48 +110,19 @@ function Cubicacion() {
   }
 
   // Guardar TOTAL -> Ajusta el Global (Remanente)
-  const handleSaveTotal = async (val, item, type) => {
-    const nuevoTotal = Number(val) || 0
-    const sumaZonas = getSumaZonas(item.id, type)
-    // El Global es la diferencia. Si (nuevoTotal < sumaZonas), el Global sería negativo.
-    // Forzamos a 0 para que el Total nunca sea menor a la suma real de zonas.
-    const nuevoGlobal = Math.max(0, nuevoTotal - sumaZonas)
+  // ELIMINADO: handleSaveTotal (El total es solo lectura)
 
-    try {
-      const payload = {
-        proyecto_id: Number(projectId),
-        zona_id: null,
-        cantidad: nuevoGlobal
-      }
-      if (type === 'ACT') payload.actividad_id = item.id
-      else payload.sub_actividad_id = item.id
-
-      await cubicacionService.guardarCubicacionGlobal(payload)
-      const newCubs = await cubicacionService.getCubicaciones(projectId)
-      setCubicaciones(newCubs)
-    } catch (err) { console.error("Error saving total", err) }
-  }
-
-  // Guardar ZONA -> Ajusta el Global para mantener Total fijo (o crecer)
+  // Guardar ZONA -> Solo guarda el valor de la zona (Total se recalcula solo)
   const handleSaveCell = async (val, zonaId, item, type) => {
     const nuevaCantidad = Number(val) || 0
-    const cantidadAnterior = getCantidad(zonaId, item.id, type)
-    const diff = nuevaCantidad - cantidadAnterior
 
-    if (diff === 0) return
-
-    // 1. CÁLCULO OPTIMISTA (Actualizar UI inmediatamente)
-    const globalActual = getCantidad(null, item.id, type)
-    const globalNuevo = Math.max(0, globalActual - diff) // Prevent negative global
-
+    // 1. UPDATE OPTIMISTA
     const newCubsState = [...cubicaciones]
-
-    // A. Actualizar ZONA en estado local
     const idxZona = newCubsState.findIndex(c => c.zona_id === zonaId && (type === 'ACT' ? c.actividad_id === item.id : c.sub_actividad_id === item.id))
+
     if (idxZona >= 0) {
       newCubsState[idxZona] = { ...newCubsState[idxZona], cantidad: nuevaCantidad }
     } else {
-      // Si no existía, simular creación (aunque falte ID real, sirve para display)
       newCubsState.push({
         id: `temp-${Date.now()}`,
         proyecto_id: Number(projectId),
@@ -161,25 +132,9 @@ function Cubicacion() {
         cantidad: nuevaCantidad
       })
     }
+    setCubicaciones(newCubsState)
 
-    // B. Actualizar GLOBAL en estado local
-    const idxGlobal = newCubsState.findIndex(c => c.zona_id === null && (type === 'ACT' ? c.actividad_id === item.id : c.sub_actividad_id === item.id))
-    if (idxGlobal >= 0) {
-      newCubsState[idxGlobal] = { ...newCubsState[idxGlobal], cantidad: globalNuevo }
-    } else {
-      newCubsState.push({
-        id: `temp-global-${Date.now()}`,
-        proyecto_id: Number(projectId),
-        zona_id: null,
-        actividad_id: type === 'ACT' ? item.id : null,
-        sub_actividad_id: type === 'SUB' ? item.id : null,
-        cantidad: globalNuevo
-      })
-    }
-
-    setCubicaciones(newCubsState) // UPDATE UI NOW
-
-    // 2. PERSISTENCIA (Segundo plano)
+    // 2. PERSISTENCIA
     try {
       const payloadZona = {
         proyecto_id: Number(projectId),
@@ -191,34 +146,19 @@ function Cubicacion() {
 
       await cubicacionService.guardarCubicacion(payloadZona)
 
-      const payloadGlobal = {
-        proyecto_id: Number(projectId),
-        zona_id: null,
-        cantidad: globalNuevo
-      }
-      if (type === 'ACT') payloadGlobal.actividad_id = item.id
-      else payloadGlobal.sub_actividad_id = item.id
-
-      await cubicacionService.guardarCubicacionGlobal(payloadGlobal)
-
-      // Opcional: Recargar en background para consistencia final de IDs
-      const finalCubs = await cubicacionService.getCubicaciones(projectId)
-      setCubicaciones(finalCubs)
-
+      // Opcional: Recarga silenciosa
+      // const finalCubs = await cubicacionService.getCubicaciones(projectId)
+      // setCubicaciones(finalCubs)
     } catch (err) {
       console.error("Error saving cell", err)
-      alert("Error al guardar. Recargando...") // Fallback
+      alert("Error al guardar. Recargando...")
       loadAllData()
     }
   }
 
+  // TOTAL FILA = Suma estricta de zonas
   const getTotalFila = (itemId, type) => {
-    const matches = cubicaciones.filter(c => {
-      if (type === 'ACT') return c.actividad_id === itemId
-      if (type === 'SUB') return c.sub_actividad_id === itemId
-      return false
-    })
-    return matches.reduce((sum, curr) => sum + Number(curr.cantidad), 0)
+    return getSumaZonas(itemId, type)
   }
 
   // ==========================================
@@ -484,15 +424,10 @@ function Cubicacion() {
                   <td style={{ ...cellSticky(COL_WIDTHS.ITEM), width: COL_WIDTHS.PRECIO }} className="text-end text-muted font-monospace border-bottom">
                     ${act.valor_venta?.toLocaleString() || 0}
                   </td>
-                  <td style={cellStickyTotal} className="p-0 border-bottom border-end">
-                    <input
-                      type="number"
-                      className="form-control form-control-sm border-0 text-center fw-bold font-monospace bg-transparent no-spinner"
-                      style={{ fontSize: '0.9rem', color: '#000', ...noSpinnerStyle }}
-                      placeholder="-"
-                      defaultValue={getTotalFila(act.id, 'ACT') || ''}
-                      onBlur={(e) => handleSaveTotal(e.target.value, act, 'ACT')}
-                    />
+                  <td style={cellStickyTotal} className="p-0 border-bottom border-end bg-light">
+                    <div className="w-100 h-100 d-flex align-items-center justify-content-center fw-bold text-dark font-monospace" style={{ fontSize: '0.9rem' }}>
+                      {getTotalFila(act.id, 'ACT') || '-'}
+                    </div>
                   </td>
                   {filteredZonas.map(z => {
                     const val = getCantidad(z.id, act.id, 'ACT')
@@ -527,15 +462,10 @@ function Cubicacion() {
                     <td style={{ ...cellSticky(COL_WIDTHS.ITEM), width: COL_WIDTHS.PRECIO, backgroundColor: '#fafafa' }} className="text-end text-muted font-monospace small border-bottom">
                       ${sub.valor_venta?.toLocaleString() || 0}
                     </td>
-                    <td style={{ ...cellStickyTotal, backgroundColor: '#fafafa' }} className="p-0 border-bottom border-end">
-                      <input
-                        type="number"
-                        className="form-control form-control-sm border-0 text-center fw-semibold font-monospace bg-transparent no-spinner"
-                        style={{ fontSize: '0.85rem', ...noSpinnerStyle }}
-                        placeholder="-"
-                        defaultValue={getTotalFila(sub.id, 'SUB') || ''}
-                        onBlur={(e) => handleSaveTotal(e.target.value, sub, 'SUB')}
-                      />
+                    <td style={{ ...cellStickyTotal, backgroundColor: '#f0f0f0' }} className="p-0 border-bottom border-end">
+                      <div className="w-100 h-100 d-flex align-items-center justify-content-center fw-semibold text-secondary font-monospace" style={{ fontSize: '0.85rem' }}>
+                        {getTotalFila(sub.id, 'SUB') || '-'}
+                      </div>
                     </td>
                     {filteredZonas.map(z => {
                       const val = getCantidad(z.id, sub.id, 'SUB')
