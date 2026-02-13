@@ -268,13 +268,14 @@ function Cubicacion() {
   const COL_WIDTHS = {
     ITEM: 300,
     PRECIO: 100,
-    TOTAL: 160
+    TOTAL: 220
   };
 
   // Estilo para ocultar flechas de input number
   const noSpinnerStyle = {
     MozAppearance: 'textfield',
     appearance: 'textfield',
+    padding: '0 4px', // Reducir padding interno para ganar espacio
   };
 
   // Estilo base para celdas del BODY (columnas fijas)
