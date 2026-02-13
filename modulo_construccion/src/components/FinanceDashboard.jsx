@@ -318,7 +318,7 @@ export default function FinanceDashboard({ projectId }) {
 
             cubicaciones.filter(c => isGlobal ? !c.zona_id : c.zona_id === zona.id).forEach(c => {
                 const cant = Number(c.cantidad) || 0;
-                if (cant <= 0) return;
+                if (cant === 0) return; // Permitir negativos
 
                 const isSub = !!c.sub_actividad_id;
                 const id = isSub ? `sub_${c.sub_actividad_id}` : `act_${c.actividad_id}`;
