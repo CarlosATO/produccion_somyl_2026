@@ -89,7 +89,7 @@ export const tareasService = {
     // 1. Actualizar Cabecera
     const { data, error } = await supabase
       .from('prod_tareas')
-      .update({ ...tareaPayload, updated_at: new Date() })
+      .update({ ...tareaPayload })
       .eq('id', id)
       .select()
       .single()
@@ -120,7 +120,7 @@ export const tareasService = {
   async actualizarEstado(id, nuevoEstado, datosAdicionales = {}) {
     const { data, error } = await supabase
       .from('prod_tareas')
-      .update({ estado: nuevoEstado, updated_at: new Date(), ...datosAdicionales })
+      .update({ estado: nuevoEstado, ...datosAdicionales })
       .eq('id', id)
       .select()
       .single()
@@ -212,7 +212,7 @@ export const tareasService = {
 
     const { data, error } = await supabase
       .from('prod_tareas')
-      .select('id, updated_at, estado, proveedor:proveedores(nombre)')
+      .select('id, estado, proveedor:proveedores(nombre)')
       .eq('proyecto_id', proyectoId)
       .eq('estado', estadoLimpio)
 

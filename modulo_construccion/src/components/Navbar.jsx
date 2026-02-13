@@ -110,25 +110,25 @@ export default function Navbar() {
 
   useEffect(() => {
     // 1. Check initial
-    if (currentProject) checkStaleTasks();
+    // if (currentProject) checkStaleTasks();
 
     // 2. Interval Check (every 5 min)
-    const interval = setInterval(() => {
+    /* const interval = setInterval(() => {
       if (currentProject) checkStaleTasks();
-    }, 5 * 60 * 1000);
+    }, 5 * 60 * 1000); */
 
     // 3. Listen for global events
     const handleUpdate = () => {
       // Delay slighty to allow DB propagation
-      setTimeout(() => {
+      /* setTimeout(() => {
         if (currentProject) checkStaleTasks();
-      }, 500);
+      }, 500); */
     };
 
     window.addEventListener('kanban-updated', handleUpdate);
 
     return () => {
-      clearInterval(interval);
+      // clearInterval(interval);
       window.removeEventListener('kanban-updated', handleUpdate);
     };
   }, [currentProject]);
