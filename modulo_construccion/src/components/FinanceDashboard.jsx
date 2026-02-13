@@ -38,6 +38,8 @@ export default function FinanceDashboard({ projectId }) {
     // NUEVO MODAL VENTA CUBICADA
     const [showModalVenta, setShowModalVenta] = useState(false);
     const [detalleVentaData, setDetalleVentaData] = useState([]);
+    const [zonaVentaSeleccionada, setZonaVentaSeleccionada] = useState(null); // Nivel 2 Venta
+    const [detalleZonaVentaData, setDetalleZonaVentaData] = useState([]);     // Datos Nivel 2 Venta
 
     // NUEVO MODAL PENDIENTE DE EJECUTAR
     const [showModalPendiente, setShowModalPendiente] = useState(false);
@@ -73,15 +75,18 @@ export default function FinanceDashboard({ projectId }) {
 
             // CALCULAR VENTA CUBICADA REAL (Desde Matriz) y DESGLOSAR POR ZONA (Para Modal)
             const mapaVentaPorZona = {}; // ZonaID -> Total
+            const ZONA_GLOBAL_KEY = 'GLOBAL';
+
             if (cubicaciones && cubicaciones.length > 0) {
                 cubicaciones.forEach(c => {
                     const cant = Number(c.cantidad) || 0;
                     const precio = Number(c.actividad?.valor_venta || c.sub_actividad?.valor_venta || 0);
                     const totalLinea = cant * precio;
 
-                    // Acumular por Zona
-                    if (totalLinea > 0 && c.zona_id) {
-                        mapaVentaPorZona[c.zona_id] = (mapaVentaPorZona[c.zona_id] || 0) + totalLinea;
+                    // Acumular por Zona (o Global)
+                    if (totalLinea > 0) {
+                        const zId = c.zona_id || ZONA_GLOBAL_KEY;
+                        mapaVentaPorZona[zId] = (mapaVentaPorZona[zId] || 0) + totalLinea;
                     }
                 });
             }
@@ -91,8 +96,18 @@ export default function FinanceDashboard({ projectId }) {
                 id: z.id,
                 nombre: z.nombre,
                 total: mapaVentaPorZona[z.id] || 0
-            })).filter(z => z.total > 0).sort((a, b) => b.total - a.total);
+            })).filter(z => z.total > 0);
 
+            // Agregar Global si existe
+            if (mapaVentaPorZona[ZONA_GLOBAL_KEY] > 0) {
+                listaVentaPorZona.push({
+                    id: ZONA_GLOBAL_KEY,
+                    nombre: 'Global / Sin Zona',
+                    total: mapaVentaPorZona[ZONA_GLOBAL_KEY]
+                });
+            }
+
+            listaVentaPorZona.sort((a, b) => b.total - a.total);
             setDetalleVentaData(listaVentaPorZona);
 
             todasLasTareas.forEach(tarea => {
@@ -290,6 +305,38 @@ export default function FinanceDashboard({ projectId }) {
         } finally {
             setLoading(false);
         }
+    }
+
+    // --- LÓGICA NIVEL 2 VENTA: DETALLE POR ACTIVIDAD (Exclusivo Cubicaciones) ---
+    const handleZonaVentaClick = async (zona) => {
+        setLoading(true);
+        try {
+            const cubicaciones = await cubicacionService.getCubicaciones(projectId);
+            const actsMap = {};
+
+            const isGlobal = zona.id === 'GLOBAL';
+
+            cubicaciones.filter(c => isGlobal ? !c.zona_id : c.zona_id === zona.id).forEach(c => {
+                const cant = Number(c.cantidad) || 0;
+                if (cant <= 0) return;
+
+                const isSub = !!c.sub_actividad_id;
+                const id = isSub ? `sub_${c.sub_actividad_id}` : `act_${c.actividad_id}`;
+                const nombre = isSub ? c.sub_actividad?.nombre : c.actividad?.nombre;
+                const unit = isSub ? c.sub_actividad?.unidad : c.actividad?.unidad;
+                const precio = Number(isSub ? c.sub_actividad?.valor_venta : c.actividad?.valor_venta) || 0;
+
+                if (!actsMap[id]) actsMap[id] = { id, nombre, unit, precio, cantidad: 0, total: 0 };
+                actsMap[id].cantidad += cant;
+                actsMap[id].total += (cant * precio);
+            });
+
+            const detalle = Object.values(actsMap).sort((a, b) => b.total - a.total);
+            setDetalleZonaVentaData(detalle);
+            setZonaVentaSeleccionada(zona);
+
+        } catch (e) { console.error(e) }
+        finally { setLoading(false) }
     }
 
     const formatMoney = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(val);
@@ -752,47 +799,98 @@ export default function FinanceDashboard({ projectId }) {
                 </div>
             </div>
 
-            {/* 3. MODAL DETALLE VENTA CUBICADA */}
-            <Modal show={showModalVenta} onHide={() => setShowModalVenta(false)} centered scrollable>
-                {/* ... keep content ... */}
-                {/* (Este modal no lo toco, solo era referencia) */}
-                <Modal.Header closeButton className="bg-cyan-50 text-cyan-800">
-                    <Modal.Title className="h6 fw-bold">
-                        <i className="bi bi-layers-half me-2"></i>Desglose Venta Cubicada
+            {/* 3. MODAL DETALLE VENTA CUBICADA (NIVEL 1 & 2) */}
+            <Modal show={showModalVenta} onHide={() => { setShowModalVenta(false); setZonaVentaSeleccionada(null); }} centered scrollable size={zonaVentaSeleccionada ? 'lg' : 'md'}>
+                <Modal.Header closeButton className="bg-cyan-50 text-cyan-800 border-bottom-0">
+                    <Modal.Title className="h6 fw-bold flex items-center gap-2">
+                        {zonaVentaSeleccionada ? (
+                            <>
+                                <button onClick={() => setZonaVentaSeleccionada(null)} className="btn btn-sm btn-light rounded-circle me-2 p-1" title="Volver">
+                                    <ArrowLeft size={16} />
+                                </button>
+                                <span>{zonaVentaSeleccionada.nombre}</span>
+                            </>
+                        ) : (
+                            <>
+                                <i className="bi bi-layers-half me-2"></i>Desglose Venta Cubicada
+                            </>
+                        )}
                     </Modal.Title>
                 </Modal.Header>
                 <Modal.Body className="p-0">
-                    <Table hover striped className="mb-0 small align-middle">
-                        <thead className="bg-light text-secondary">
-                            <tr>
-                                <th className="ps-4">Zona</th>
-                                <th className="text-end pe-4">Monto Cubicado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {detalleVentaData.length > 0 ? (
-                                detalleVentaData.map((item) => (
-                                    <tr key={item.id}>
-                                        <td className="ps-4 fw-medium text-slate-700">{item.nombre}</td>
-                                        <td className="text-end pe-4 font-monospace">{formatMoney(item.total)}</td>
-                                    </tr>
-                                ))
-                            ) : (
+                    {!zonaVentaSeleccionada ? (
+                        /* NIVEL 1: LISTA ZONAS */
+                        <Table hover striped className="mb-0 small align-middle">
+                            <thead className="bg-light text-secondary sticky-top">
                                 <tr>
-                                    <td colSpan="2" className="text-center py-3 text-muted">Sin datos cubicados</td>
+                                    <th className="ps-4 py-3">Zona / Ubicación</th>
+                                    <th className="text-end pe-4 py-3">Monto Cubicado</th>
                                 </tr>
-                            )}
-                        </tbody>
-                        <tfoot className="bg-light">
-                            <tr>
-                                <td className="text-end fw-bold text-secondary pe-3">TOTAL:</td>
-                                <td className="text-end pe-4 fw-bold text-cyan-700">{formatMoney(kpis.venta_cubicada)}</td>
-                            </tr>
-                        </tfoot>
-                    </Table>
+                            </thead>
+                            <tbody>
+                                {detalleVentaData.length > 0 ? (
+                                    detalleVentaData.map((item) => (
+                                        <tr
+                                            key={item.id}
+                                            onClick={() => handleZonaVentaClick(item)}
+                                            className="cursor-pointer group hover:bg-cyan-50 transition-colors"
+                                            title="Clic para ver detalle de actividades"
+                                        >
+                                            <td className="ps-4 py-3 fw-medium text-slate-700 group-hover:text-cyan-700 transition-colors">
+                                                {item.nombre}
+                                                {item.id === 'GLOBAL' && <Badge bg="info" className="ms-2 text-white" style={{ fontSize: '0.65rem' }}>Global</Badge>}
+                                            </td>
+                                            <td className="text-end pe-4 py-3 font-monospace fw-bold text-slate-700">
+                                                {formatMoney(item.total)}
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="2" className="text-center py-4 text-muted">Sin datos cubicados</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                            <tfoot className="bg-light border-top">
+                                <tr>
+                                    <td className="text-end fw-bold text-secondary pe-3 py-3">TOTAL:</td>
+                                    <td className="text-end pe-4 fw-bold text-cyan-700 font-monospace text-lg">
+                                        {formatMoney(kpis.venta_cubicada)}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </Table>
+                    ) : (
+                        /* NIVEL 2: DETALLE ACTIVIDADES */
+                        <Table responsive hover className="mb-0 small align-middle">
+                            <thead className="bg-light text-secondary sticky-top">
+                                <tr>
+                                    <th className="ps-4 py-2">Actividad</th>
+                                    <th className="text-center py-2">Uni.</th>
+                                    <th className="text-end py-2">Precio</th>
+                                    <th className="text-center py-2">Cant.</th>
+                                    <th className="text-end pe-4 py-2">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {detalleZonaVentaData.map((act, i) => (
+                                    <tr key={`${act.id}-${i}`}>
+                                        <td className="ps-4 py-2 fw-medium text-slate-700 text-break">{act.nombre}</td>
+                                        <td className="text-center py-2 text-muted">{act.unit}</td>
+                                        <td className="text-end py-2 font-monospace text-muted">{formatMoney(act.precio)}</td>
+                                        <td className="text-center py-2 font-monospace fw-bold">{Number(act.cantidad).toLocaleString('es-CL')}</td>
+                                        <td className="text-end pe-4 py-2 font-monospace fw-bold text-slate-800">
+                                            {formatMoney(act.total)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </Table>
+                    )}
                 </Modal.Body>
-                <Modal.Footer className="py-2 bg-light border-top-0">
-                    <small className="text-muted w-100 text-center">Datos según Matriz de Cubicación</small>
+                <Modal.Footer className="py-2 bg-light border-top-0 justify-content-between">
+                    {!zonaVentaSeleccionada && <small className="text-muted">Doble clic en una fila para ver detalle.</small>}
+                    <small className="text-muted ms-auto">Datos según Matriz de Cubicación</small>
                 </Modal.Footer>
             </Modal>
 
