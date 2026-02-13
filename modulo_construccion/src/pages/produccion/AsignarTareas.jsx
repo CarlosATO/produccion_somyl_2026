@@ -456,9 +456,11 @@ function AsignarTareas() {
             return alert("⚠️ Debes seleccionar una Cuadrilla / Contratista para asignar la tarea.");
         }
 
-        if (!startDate || !endDate) {
-            return alert("⚠️ Debes seleccionar un rango de fechas (Inicio y Término).");
+        if (!startDate) {
+            return alert("⚠️ Debes seleccionar al menos una fecha de inicio.");
         }
+        // Si solo seleccionó un día, la fecha de término es la misma
+        const finalEndDate = endDate || startDate;
 
         // 2. VALIDACIÓN DE MATERIALES (Bloqueo Estricto)
         const isExecution = editingTask?.estado && editingTask?.estado !== 'ASIGNADA';
@@ -491,7 +493,7 @@ function AsignarTareas() {
                 zona_id: selectedZona?.value || null, // Asegurar null si no hay zona
                 tramo_id: selectedTramo?.value || null,
                 fecha_asignacion: startDate, // Date object or ISO string
-                fecha_estimada_termino: endDate,
+                fecha_estimada_termino: finalEndDate,
                 archivo_plano_url: fileUrl || null,
                 comentarios_asignacion: comentarios || '',
                 estado_pago_id: editingTask?.estado_pago_id || selectedEP?.value || null,
