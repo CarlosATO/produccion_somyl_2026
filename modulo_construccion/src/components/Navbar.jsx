@@ -49,8 +49,9 @@ export default function Navbar() {
 
   // Filter projects
   const filteredProjects = allProjects.filter(p =>
-    (p.proyecto || '').toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
-    (p.codigo || '').toLowerCase().includes(projectSearchTerm.toLowerCase())
+    p.activo !== false && // Mostrar solo activos
+    ((p.proyecto || '').toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+      (p.codigo || '').toLowerCase().includes(projectSearchTerm.toLowerCase()))
   );
 
   const [currentProject, setCurrentProject] = useState(null);
@@ -194,8 +195,8 @@ export default function Navbar() {
                               key={p.id}
                               onClick={() => handleSwitchProject(p.id)}
                               className={`w-full text-left px-3 py-2.5 hover:bg-slate-700/50 transition-colors border-l-2 flex flex-col ${p.id === currentProject.id
-                                  ? 'bg-blue-900/10 border-blue-500'
-                                  : 'border-transparent'
+                                ? 'bg-blue-900/10 border-blue-500'
+                                : 'border-transparent'
                                 }`}
                             >
                               <span className={`text-xs font-bold ${p.id === currentProject.id ? 'text-blue-400' : 'text-slate-200'}`}>
