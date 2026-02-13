@@ -48,29 +48,44 @@ export const cubicacionService = {
 
   // Guarda o actualiza una celda específica (Upsert)
   async guardarCubicacion(payload) {
+    // Eliminar el otro campo de ID para evitar basura
+    if (payload.actividad_id) delete payload.sub_actividad_id
+    else delete payload.actividad_id
 
+    const { data, error } = await supabase
+      .from('prod_cubicaciones')
+      .upsert(payload, {
+        onConflict: payload.actividad_id ? 'proyecto_id, zona_id, actividad_id' : 'proyecto_id, zona_id, sub_actividad_id'
+      })
+      .select()
+
+    if (error) throw error
     return data
   },
 
-  // Guarda explícitamente el global (zona_id = null) borrando anterior para evitar duplicados por tema de NULL UNIQUE
-  async guardarCubicacionGlobal(payload) {
-    // 1. Borrar previo (zona_id IS NULL)
-    let query = supabase.from('prod_cubicaciones').delete().is('zona_id', null).eq('proyecto_id', payload.proyecto_id)
-
-    if (payload.actividad_id) query = query.eq('actividad_id', payload.actividad_id)
-    else if (payload.sub_actividad_id) query = query.eq('sub_actividad_id', payload.sub_actividad_id)
-
-    const { error: delError } = await query
-    if (delError) console.error("Error borrando global anterior", delError)
-
-    // 2. Insertar nuevo
-    const newPayload = { ...payload, zona_id: null }
-    if (newPayload.actividad_id) delete newPayload.sub_actividad_id
-    else delete newPayload.actividad_id
-
-    // Si la cantidad es 0, quizás no necesitemos insertar, pero para consistencia insertamos
-    const { data, error } = await supabase.from('prod_cubicaciones').insert(newPayload).select()
+  // Borra todo lo de este proyecto
+  async eliminarTodo(proyectoId) {
+    const { error } = await supabase
+      .from('prod_cubicaciones')
+      .delete()
+      .eq('proyecto_id', proyectoId)
     if (error) throw error
+    return true
+  },
+
+  // Mantenemos esto por si acaso, aunque ya no se use en la UI actual
+  async guardarCubicacionGlobal(payload) {
+    const { error } = await supabase
+      .from('prod_cubicaciones')
+      .delete()
+      .is('zona_id', null)
+      .eq('proyecto_id', payload.proyecto_id)
+      .match(payload.actividad_id ? { actividad_id: payload.actividad_id } : { sub_actividad_id: payload.sub_actividad_id })
+
+    if (error) console.error("Error cleaning global", error)
+
+    const { data, error: insError } = await supabase.from('prod_cubicaciones').insert({ ...payload, zona_id: null }).select()
+    if (insError) throw insError
     return data
   }
 }
