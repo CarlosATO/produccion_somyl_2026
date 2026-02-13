@@ -15,6 +15,7 @@ import {
 import { reportesService } from '../services/reportesService';
 import { tareasService } from '../services/tareasService';
 import { cubicacionService } from '../services/cubicacionService'; // <--- NUEVO IMPORT
+import { supabase } from '../services/supabaseClient';
 import { AlertCircle, TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
@@ -50,32 +51,27 @@ export default function FinanceDashboard({ projectId }) {
         try {
             setLoading(true);
 
-            // 1. Carga paralela de datos
-            const [todasLasTareas, estadoFinanciero, gastosRaw, cubicaciones, zonas] = await Promise.all([
+            // 1. Carga paralela de datos (Incluyendo RPC KPIs para consistencia con Módulo Órdenes Pago)
+            const [todasLasTareas, gastosRaw, cubicaciones, zonas, kpisRpc] = await Promise.all([
                 tareasService.getTareas(projectId),
-                reportesService.getEstadoFinancieroProyecto(projectId),
                 reportesService.getGastosRaw(projectId),
                 cubicacionService.getCubicaciones(projectId),
-                cubicacionService.getZonas(projectId)
+                cubicacionService.getZonas(projectId),
+                supabase.rpc('get_panel_general_kpis', { p_proyecto_id: Number(projectId) })
             ]);
 
-            // 2. Procesar Tareas y Subcontratistas
+            // 2. Procesar Tareas y Subcontratistas (Solo para GRÁFICOS y MO Pendiente)
             const proveedoresMap = {};
             const subcontratistasIds = new Set();
-            let totalCostoMO_Global = 0;
             let totalCostoMO_Pendiente = 0; // Sin EP o Borrador
-            let totalVenta = 0;
-            let totalVentaCubicada = 0; // <--- NUEVO (Cubicado / Presupuestado)
 
-            // CALCULAR VENTA CUBICADA REAL (Desde Matriz) y DESGLOSAR POR ZONA
+            // CALCULAR VENTA CUBICADA REAL (Desde Matriz) y DESGLOSAR POR ZONA (Para Modal)
             const mapaVentaPorZona = {}; // ZonaID -> Total
             if (cubicaciones && cubicaciones.length > 0) {
                 cubicaciones.forEach(c => {
                     const cant = Number(c.cantidad) || 0;
                     const precio = Number(c.actividad?.valor_venta || c.sub_actividad?.valor_venta || 0);
                     const totalLinea = cant * precio;
-
-                    totalVentaCubicada += totalLinea;
 
                     // Acumular por Zona
                     if (totalLinea > 0 && c.zona_id) {
@@ -94,16 +90,11 @@ export default function FinanceDashboard({ projectId }) {
             setDetalleVentaData(listaVentaPorZona);
 
             todasLasTareas.forEach(tarea => {
-
-                // YA NO CALCULAMOS VENTA CUBICADA DESDE TAREAS
-                // const itemsTodo = (tarea.items && tarea.items.length > 0) ? tarea.items : [tarea];
-                // itemsTodo.forEach(item => { ... });
-
                 if (tarea.proveedor?.id) {
                     subcontratistasIds.add(tarea.proveedor.id);
                 }
 
-                // Cálculo de Costos de Mano de Obra
+                // Cálculo de Costos de Mano de Obra (Solo para pendiente y gráfico)
                 if (tarea.cantidad_real > 0 || (tarea.items && tarea.items.some(i => i.cantidad_real > 0))) {
                     const itemsProcesar = (tarea.items && tarea.items.length > 0) ? tarea.items : [tarea];
 
@@ -112,10 +103,6 @@ export default function FinanceDashboard({ projectId }) {
                         if (cantReal > 0) {
                             const costo = cantReal * (Number(item.precio_costo_unitario) || 0);
                             const venta = cantReal * (Number(item.precio_venta_unitario) || 0);
-
-                            // Acumular Globales
-                            totalCostoMO_Global += costo;
-                            totalVenta += venta;
 
                             // Acumular Pendiente (Sin Estado Pago o Borrador)
                             const estadoEP = tarea.estado_pago?.estado;
@@ -141,42 +128,32 @@ export default function FinanceDashboard({ projectId }) {
                 }
             });
 
-            // 3. Procesar Gastos (Separar Subcontratos vs Otros)
-            let gastosNoSubcontratos = 0;
+            // 3. Procesar Gastos (Solo para GRÁFICO de Distribución)
             const desgloseItems = {};
 
             gastosRaw.forEach(g => {
                 const monto = Number(g.neto_total_recibido) || 0;
-
-                // Si el proveedor NO es un subcontratista, suma a gastos operativos externos
-                if (!subcontratistasIds.has(g.proveedor)) {
-                    gastosNoSubcontratos += monto;
-                }
-
                 // Agrupar por ítem para el gráfico (Todos los gastos)
                 const itemNombre = g.item ? g.item.trim() : 'Sin Categoría';
                 desgloseItems[itemNombre] = (desgloseItems[itemNombre] || 0) + monto;
             });
 
-            // 4. Calcular Totales Finales
-            const gastoRealNeto = estadoFinanciero.total_gasto_neto || 0;
-
-            // UTILIDAD: Ingresos - Mano de Obra Total - Gastos (Excluyendo Subcontratos ya contados arriba)
-            const utilidad = totalVenta - totalCostoMO_Global - gastosNoSubcontratos;
-            const margen = totalVenta > 0 ? (utilidad / totalVenta) * 100 : 0;
+            // 4. Set KPIs desde RPC (CONSISTENCIA CON ORDENES DE PAGO)
+            // Usamos los valores calculados en SQL que incluyen Gastos Directos y Descuento IVA
+            const k = kpisRpc.data || {};
 
             setKpis({
-                ingresos: totalVenta,
-                costos_mo: totalCostoMO_Pendiente, // MOSTRAR PENDIENTE
-                costos_mo_total: totalCostoMO_Global, // MOSTRAR TOTAL EN SUBTITULO
-                utilidad,
-                margen,
-                gasto_realizado_neto: gastoRealNeto,
-                deuda_pendiente_neto: estadoFinanciero.saldo_pendiente_neto,
-                venta_cubicada: totalVentaCubicada
+                ingresos: k.ingresos || 0,
+                costos_mo: totalCostoMO_Pendiente, // Único valor calculado en frontend (Pendiente es dinámico UI)
+                costos_mo_total: k.costo_mo || 0, // Total Realizado desde SQL
+                utilidad: k.utilidad || 0, // Correcto (Ingresos - MO - GastoTotalNeto)
+                margen: k.margen || 0,
+                gasto_realizado_neto: k.gasto_neto || 0, // Correcto (OP + Gastos Directos Netos)
+                deuda_pendiente_neto: k.deuda_neto || 0,
+                venta_cubicada: k.venta_cubicada || 0
             });
 
-            // 5. Preparar Datos Gráfico Barras
+            // 5. Preparar Datos Gráfico Barras (Top Proveedores)
             const topProveedores = Object.values(proveedoresMap)
                 .sort((a, b) => b.produccion_costo - a.produccion_costo)
                 .slice(0, 5)
@@ -188,19 +165,14 @@ export default function FinanceDashboard({ projectId }) {
             setChartData(topProveedores);
 
             // 6. Preparar Datos Gráfico Barras (Distribución Gasto) - HORIZONTAL
-            // 6. Preparar Datos Gráfico Barras (Distribución Gasto) - HORIZONTAL
-            // CAMBIO: Se elimina "MANO DE OBRA" porque ya está incluido en "ESTADO DE PAGO"
             const distribucionTemp = [];
-
             Object.entries(desgloseItems).forEach(([item, valor]) => {
                 if (valor > 0) {
                     distribucionTemp.push({ name: item.toUpperCase(), value: valor });
                 }
             });
-
-            // Ordenar de mayor a menor y guardar
             distribucionTemp.sort((a, b) => b.value - a.value);
-            setPieData(distribucionTemp); // Reutilizamos variable pieData aunque ahora es barras
+            setPieData(distribucionTemp);
 
         } catch (error) {
             console.error("Error cargando dashboard financiero:", error);
@@ -224,14 +196,13 @@ export default function FinanceDashboard({ projectId }) {
 
         let title = '';
         let data = [];
-        let headers = []; // Nuevo
+        let headers = [];
+        let tabs = null;
 
         try {
             if (type === 'ingresos') {
                 title = 'Resumen Ingresos (Por Actividad)';
                 const tareas = await tareasService.getTareas(projectId);
-
-                // Agrupar por Actividad (Nombre)
                 const agrupado = {};
 
                 tareas.forEach(tarea => {
@@ -239,82 +210,92 @@ export default function FinanceDashboard({ projectId }) {
                     items.forEach(item => {
                         const cant = Number(item.cantidad_real) || 0;
                         if (cant > 0) {
-                            // Prioridad: Actividad vinculada > Sub-actividad > Nombre manual > Nombre tarea parent
                             const nombre = item.actividad?.nombre || item.sub_actividad?.nombre || item.nombre || tarea.nombre || 'Sin Nombre';
                             const precio = Number(item.precio_venta_unitario) || 0;
 
-                            if (!agrupado[nombre]) {
-                                agrupado[nombre] = {
-                                    nombre,
-                                    precio,
-                                    cantidad_total: 0,
-                                    venta_total: 0
-                                };
-                            }
-                            // Acumulamos
+                            if (!agrupado[nombre]) agrupado[nombre] = { nombre, precio, cantidad_total: 0, venta_total: 0 };
                             agrupado[nombre].cantidad_total += cant;
                             agrupado[nombre].venta_total += (cant * precio);
                         }
                     });
                 });
 
-                // Convertir a Array para la tabla
                 data = Object.values(agrupado).map((a, index) => ({
                     id: index,
-                    col1: a.nombre,                      // Actividad
-                    col2: formatMoney(a.precio),         // Precio Venta
-                    col3: Number(a.cantidad_total).toLocaleString('es-CL'), // Cant. Realizada
-                    monto: a.venta_total,                // Total Venta (Monto)
+                    col1: a.nombre,
+                    col2: formatMoney(a.precio),
+                    col3: Number(a.cantidad_total).toLocaleString('es-CL'),
+                    monto: a.venta_total,
                     status: 'Ejecutado'
                 }));
-
                 headers = ['Actividad', 'Precio Unitario', 'Cant. Real', 'Total Venta', 'Estado'];
 
-            } else if (type === 'gastos_op') {
-                title = 'Detalle Gastos Operativos (Materiales e Insumos)';
-                // Reutilizamos el endpoint de desglose que ya existe o se adapta
-                // En este caso, usaremos getGastosOperativos si retorna detalle o un nuevo endpoint
-                // Por ahora, asumiremos que reportesService.getDesgloseGastos sirve
-                const desglose = await reportesService.getDesgloseGastos(projectId);
-                data = desglose.map(d => ({
-                    id: d.id || Math.random(),
-                    col1: d.item,
-                    col2: d.proveedor || '-',
-                    col3: d.fecha || '-',
-                    monto: d.total_gasto
-                }));
-            } else if (type === 'neto' || type === 'deuda') {
+            } else if (type === 'neto') {
+                title = 'Detalle Gasto Realizado (Neto)';
+
+                // 1. Obtener Órdenes de Pago (Ya vienen netas desde reportesService)
                 const detalles = await reportesService.getDetalleFinancieroProyecto(projectId);
 
-                if (type === 'neto') {
-                    title = 'Detalle Gasto Realizado (Neto)';
-                    data = detalles.gastos_netos.map(d => ({
-                        id: d.id,
-                        col1: `OP #${d.orden_numero} - ${d.proveedor}`,
-                        col2: d.detalle,
-                        col3: d.fecha,
-                        monto: d.monto_neto,
-                        status: d.estado
-                    }));
-                } else {
-                    title = 'Detalle Deuda Pendiente (Neto)';
-                    data = detalles.deuda_neta.map(d => ({
-                        id: d.id,
-                        col1: `OP #${d.orden_numero} - ${d.proveedor}`,
-                        col2: `Saldo Bruto: ${formatMoney(d.saldo_bruto)}`,
-                        col3: d.fecha,
-                        monto: d.deuda_neta,
-                        status: 'Pendiente'
-                    }));
-                }
+                // 2. Obtener Gastos Directos (Bruto -> Convertir a Neto)
+                const { data: gastosDir } = await supabase
+                    .from('gastos_directos')
+                    .select('*')
+                    .eq('proyecto_id', Number(projectId))
+                    .order('fecha', { ascending: false });
+
+                // Formatear OP
+                const opList = detalles.gastos_netos.map(d => ({
+                    id: `op-${d.id}`,
+                    col1: d.fecha || '-',
+                    col2: d.proveedor || '-',
+                    col3: `OP #${d.orden_numero} - ${d.detalle || ''}`,
+                    monto: d.monto_neto, // Ya es neto
+                    status: d.estado
+                }));
+
+                // Formatear GD (Dividir por 1.19)
+                const gdList = (gastosDir || []).map(g => ({
+                    id: `gd-${g.id}`,
+                    col1: g.fecha || '-',
+                    col2: 'Gasto Directo',
+                    col3: g.descripcion || '-',
+                    monto: Math.round((Number(g.monto) || 0) / 1.19), // Convertir a Neto
+                    status: 'Pagado'
+                }));
+
+                // Combinar y ordenar
+                const todos = [...opList, ...gdList].sort((a, b) => new Date(b.col1) - new Date(a.col1));
+
+                // Configurar Tabs
+                tabs = [
+                    { key: 'todos', label: 'Todos', count: todos.length, data: todos },
+                    { key: 'op', label: 'Órdenes de Pago', count: opList.length, data: opList },
+                    { key: 'gd', label: 'Gastos Directos', count: gdList.length, data: gdList }
+                ];
+
+                headers = ['Fecha', 'Proveedor / Tipo', 'Detalle', 'Monto Neto', 'Estado'];
+
+            } else if (type === 'deuda') {
+                title = 'Detalle Deuda Pendiente (Neto)';
+                const detalles = await reportesService.getDetalleFinancieroProyecto(projectId);
+                data = detalles.deuda_neta.map(d => ({
+                    id: d.id,
+                    col1: `OP #${d.orden_numero} - ${d.proveedor}`,
+                    col2: `Saldo Bruto: ${formatMoney(d.saldo_bruto)}`,
+                    col3: d.fecha,
+                    monto: d.deuda_neta,
+                    status: 'Pendiente'
+                }));
+                headers = ['Referencia', 'Detalle Saldo', 'Fecha Doc', 'Deuda Neta', 'Estado'];
             }
 
             setModalConfig({
                 isOpen: true,
                 title,
-                data,
+                data: tabs ? [] : data,
                 type,
-                headers // Nuevo
+                headers,
+                tabs // Nuevo
             });
 
         } catch (error) {
@@ -322,11 +303,19 @@ export default function FinanceDashboard({ projectId }) {
         }
     };
 
-    const closeModal = () => setModalConfig({ ...modalConfig, isOpen: false });
+    const closeModal = () => setModalConfig({ ...modalConfig, isOpen: false, tabs: null });
 
     // Componente Modal Interno
     const DetailModal = () => {
         if (!modalConfig.isOpen) return null;
+
+        // Estado local para pestaña activa (default: primera pestaña o null)
+        const [activeTab, setActiveTab] = useState(modalConfig.tabs ? modalConfig.tabs[0].key : null);
+
+        // Determinar qué data mostrar
+        const currentData = modalConfig.tabs
+            ? modalConfig.tabs.find(t => t.key === activeTab)?.data || []
+            : modalConfig.data;
 
         const tableHeaders = modalConfig.headers || ['Ítem / Referencia', 'Detalle', 'Fecha', 'Monto', 'Estado'];
 
@@ -343,31 +332,53 @@ export default function FinanceDashboard({ projectId }) {
                         </button>
                     </div>
 
+                    {/* Tabs (Si existen) */}
+                    {modalConfig.tabs && (
+                        <div className="flex border-b border-slate-200 px-6 gap-6 bg-white pt-2">
+                            {modalConfig.tabs.map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => setActiveTab(tab.key)}
+                                    className={`pb-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === tab.key
+                                            ? 'border-blue-600 text-blue-600'
+                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                        }`}
+                                >
+                                    {tab.label}
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${activeTab === tab.key ? 'bg-blue-100' : 'bg-slate-100'
+                                        }`}>
+                                        {tab.count}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {/* Body */}
                     <div className="p-0 overflow-auto flex-1">
                         <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0">
+                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0 font-bold tracking-wider">
                                 <tr>
                                     {tableHeaders.map((h, i) => (
                                         <th key={i} className={`px-6 py-3 ${i === 3 ? 'text-right' : i === 4 ? 'text-center' : ''}`}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
-                            <tbody>
-                                {modalConfig.data.length > 0 ? (
-                                    modalConfig.data.map((row, idx) => (
-                                        <tr key={row.id || idx} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                                            <td className="px-6 py-3 font-medium text-slate-700">{row.col1}</td>
-                                            <td className="px-6 py-3 text-slate-500 truncate max-w-[200px]" title={row.col2}>{row.col2}</td>
-                                            <td className="px-6 py-3 text-slate-500">{row.col3}</td>
-                                            <td className="px-6 py-3 text-right font-mono font-medium text-slate-700">
+                            <tbody className="divide-y divide-slate-100">
+                                {currentData.length > 0 ? (
+                                    currentData.map((row, idx) => (
+                                        <tr key={row.id || idx} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-3 whitespace-nowrap text-slate-600 font-medium">{row.col1}</td>
+                                            <td className="px-6 py-3 text-slate-600">{row.col2}</td>
+                                            <td className="px-6 py-3 text-slate-500 max-w-[250px] truncate" title={row.col3}>{row.col3}</td>
+                                            <td className="px-6 py-3 text-right font-mono font-bold text-slate-700">
                                                 {formatMoney(row.monto)}
                                             </td>
                                             <td className="px-6 py-3 text-center">
                                                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase 
-                                                    ${row.status === 'Pagado' || row.status === 'Ejecutado' ? 'bg-green-100 text-green-600' :
-                                                        row.status === 'Pendiente' ? 'bg-red-100 text-red-600' :
-                                                            'bg-orange-100 text-orange-600'}`}>
+                                                    ${row.status === 'Pagado' || row.status === 'Ejecutado' ? 'bg-green-100 text-green-700' :
+                                                        row.status === 'Pendiente' ? 'bg-red-100 text-red-700' :
+                                                            'bg-orange-100 text-orange-700'}`}>
                                                     {row.status || '-'}
                                                 </span>
                                             </td>
@@ -375,8 +386,8 @@ export default function FinanceDashboard({ projectId }) {
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan="5" className="px-6 py-8 text-center text-slate-400 italic">
-                                            No hay registros para mostrar
+                                        <td colSpan="5" className="px-6 py-10 text-center text-slate-400 italic">
+                                            No hay registros para mostrar en esta sección
                                         </td>
                                     </tr>
                                 )}
@@ -384,13 +395,16 @@ export default function FinanceDashboard({ projectId }) {
                         </table>
                     </div>
 
-                    {/* Footer */}
-                    <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-between items-center">
+                    {/* Footer - Total Dinámico según Tab */}
+                    <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-between items-center shadow-inner">
                         <span className="text-xs text-slate-400 font-medium">
-                            {modalConfig.data.length} registros encontrados
+                            Mostrando {currentData.length} registros
                         </span>
-                        <div className="text-sm font-bold text-slate-700">
-                            Total: {formatMoney(modalConfig.data.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0))}
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs uppercase font-bold text-slate-400">Total:</span>
+                            <div className="text-lg font-bold text-slate-800">
+                                {formatMoney(currentData.reduce((acc, curr) => acc + (Number(curr.monto) || 0), 0))}
+                            </div>
                         </div>
                     </div>
                 </div>
