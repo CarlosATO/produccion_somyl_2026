@@ -16,7 +16,7 @@ import { reportesService } from '../services/reportesService';
 import { tareasService } from '../services/tareasService';
 import { cubicacionService } from '../services/cubicacionService'; // <--- NUEVO IMPORT
 import { supabase } from '../services/supabaseClient';
-import { AlertCircle, TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
+import { AlertCircle, TrendingUp, TrendingDown, DollarSign, Wallet, ClipboardList, ArrowLeft } from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
@@ -38,6 +38,12 @@ export default function FinanceDashboard({ projectId }) {
     // NUEVO MODAL VENTA CUBICADA
     const [showModalVenta, setShowModalVenta] = useState(false);
     const [detalleVentaData, setDetalleVentaData] = useState([]);
+
+    // NUEVO MODAL PENDIENTE DE EJECUTAR
+    const [showModalPendiente, setShowModalPendiente] = useState(false);
+    const [detallePendienteData, setDetallePendienteData] = useState([]); // Nivel 1: Zonas
+    const [zonaSeleccionada, setZonaSeleccionada] = useState(null); // Nivel 2: Detalle Actividades de una Zona
+    const [detalleZonaData, setDetalleZonaData] = useState([]); // Datos Nivel 2
 
     const [chartData, setChartData] = useState([]); // Para gráfico de barras
     const [pieData, setPieData] = useState([]);     // Para gráfico circular
@@ -138,6 +144,41 @@ export default function FinanceDashboard({ projectId }) {
                 desgloseItems[itemNombre] = (desgloseItems[itemNombre] || 0) + monto;
             });
 
+            // 3b. CALCULAR PRODUCCIÓN POR ZONA (Para KPI Pendiente)
+            const mapaProduccionPorZona = {};
+            todasLasTareas.forEach(t => {
+                const zonaId = t.zona_id;
+                if (!zonaId) return;
+
+                const items = t.items?.length > 0 ? t.items : [t];
+                items.forEach(i => {
+                    // Consideramos lo producido (cantidad_real)
+                    const cant = Number(i.cantidad_real) || 0;
+                    const precio = Number(i.precio_venta_unitario) || 0;
+                    if (cant > 0) {
+                        mapaProduccionPorZona[zonaId] = (mapaProduccionPorZona[zonaId] || 0) + (cant * precio);
+                    }
+                });
+            });
+
+            // 3c. Preparar Datos para Modal Pendiente (Nivel 1: Por Zona)
+            const listaPendientePorZona = zonas.map(z => {
+                const venta = mapaVentaPorZona[z.id] || 0;
+                const prod = mapaProduccionPorZona[z.id] || 0;
+                const pendiente = venta - prod;
+                return {
+                    id: z.id,
+                    nombre: z.nombre,
+                    venta,
+                    prod,
+                    pendiente
+                };
+            }).filter(z => Math.abs(z.pendiente) > 1000); // Mostrar si hay diferencia significativa (> $1000)
+
+            listaPendientePorZona.sort((a, b) => b.pendiente - a.pendiente);
+            setDetallePendienteData(listaPendientePorZona);
+
+
             // 4. Set KPIs desde RPC (CONSISTENCIA CON ORDENES DE PAGO)
             // Usamos los valores calculados en SQL que incluyen Gastos Directos y Descuento IVA
             const k = kpisRpc.data || {};
@@ -180,6 +221,76 @@ export default function FinanceDashboard({ projectId }) {
             setLoading(false);
         }
     };
+
+    // --- LÓGICA NIVEL 2: DETALLE POR ACTIVIDAD EN UNA ZONA ---
+    const handleZonaClick = async (zona) => {
+        setLoading(true);
+        try {
+            // Recalcular detalle fino para esta zona
+            const zonaId = zona.id;
+            const [cubicaciones, tareas] = await Promise.all([
+                cubicacionService.getCubicaciones(projectId),
+                tareasService.getTareas(projectId)
+            ]);
+
+            // 1. Mapa de Cubicaciones de la Zona
+            const actsMap = {}; // key: "act_ID" o "sub_ID" -> { nombre, unit, precio, cub_cant, prod_cant }
+
+            cubicaciones.filter(c => c.zona_id === zonaId).forEach(c => {
+                const isSub = !!c.sub_actividad_id;
+                const id = isSub ? `sub_${c.sub_actividad_id}` : `act_${c.actividad_id}`;
+                const nombre = isSub ? c.sub_actividad?.nombre : c.actividad?.nombre;
+                const unit = isSub ? c.sub_actividad?.unidad : c.actividad?.unidad;
+                const precio = Number(isSub ? c.sub_actividad?.valor_venta : c.actividad?.valor_venta) || 0;
+                const cant = Number(c.cantidad) || 0;
+
+                if (!actsMap[id]) actsMap[id] = { id, nombre, unit, precio, cub_cant: 0, prod_cant: 0 };
+                actsMap[id].cub_cant += cant;
+            });
+
+            // 2. Mapa de Producción (Tareas) de la Zona
+            tareas.filter(t => t.zona_id === zonaId).forEach(t => {
+                const items = t.items?.length > 0 ? t.items : [t];
+                items.forEach(i => {
+                    const cant = Number(i.cantidad_real) || 0;
+                    if (cant > 0) {
+                        // Determinar ID compatible con cubicación
+                        let id = null;
+                        if (i.sub_actividad_id || i.sub_actividad?.id) {
+                            id = `sub_${i.sub_actividad_id || i.sub_actividad.id}`;
+                        } else if (i.actividad_id || i.actividad?.id) {
+                            id = `act_${i.actividad_id || i.actividad.id}`;
+                        }
+
+                        if (id) {
+                            // Si no existe en cubicación (extra), lo creamos
+                            if (!actsMap[id]) {
+                                const nombre = i.actividad?.nombre || i.sub_actividad?.nombre || t.nombre;
+                                const precio = Number(i.precio_venta_unitario) || 0;
+                                actsMap[id] = { id, nombre, unit: 'un', precio, cub_cant: 0, prod_cant: 0 };
+                            }
+                            actsMap[id].prod_cant += cant;
+                        }
+                    }
+                });
+            });
+
+            // 3. Array plano
+            const detalle = Object.values(actsMap).map(item => ({
+                ...item,
+                pendiente_cant: item.cub_cant - item.prod_cant,
+                pendiente_monto: (item.cub_cant - item.prod_cant) * item.precio
+            })).sort((a, b) => b.pendiente_monto - a.pendiente_monto);
+
+            setDetalleZonaData(detalle);
+            setZonaSeleccionada(zona);
+
+        } catch (e) {
+            console.error("Error cargando detalle zona", e);
+        } finally {
+            setLoading(false);
+        }
+    }
 
     const formatMoney = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(val);
 
@@ -340,8 +451,8 @@ export default function FinanceDashboard({ projectId }) {
                                     key={tab.key}
                                     onClick={() => setActiveTab(tab.key)}
                                     className={`pb-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === tab.key
-                                            ? 'border-blue-600 text-blue-600'
-                                            : 'border-transparent text-slate-500 hover:text-slate-700'
+                                        ? 'border-blue-600 text-blue-600'
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
                                         }`}
                                 >
                                     {tab.label}
@@ -433,6 +544,20 @@ export default function FinanceDashboard({ projectId }) {
                     </div>
                     <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.venta_cubicada)}</div>
                     <div className="text-[10px] text-cyan-500 mt-0.5 font-bold">Presupuesto Inicial</div>
+                </div>
+
+                {/* NUEVO: SALDO POR EJECUTAR (Clickable) */}
+                <div
+                    onDoubleClick={() => { setZonaSeleccionada(null); setShowModalPendiente(true); }}
+                    className="bg-white p-3 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-all cursor-pointer select-none group"
+                    title="Doble Clic para Ver Desglose"
+                >
+                    <div className="flex justify-between items-start mb-1">
+                        <div className="p-1.5 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-100 transition-colors"><ClipboardList size={18} /></div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Saldo por Ejecutar</span>
+                    </div>
+                    <div className="text-xl font-bold text-slate-800">{formatMoney(kpis.venta_cubicada - kpis.ingresos)}</div>
+                    <div className="text-[10px] text-orange-400 mt-0.5 font-bold">Venta Cubicada - Producción</div>
                 </div>
 
                 {/* INGRESOS (Clickable) */}
@@ -620,6 +745,8 @@ export default function FinanceDashboard({ projectId }) {
 
             {/* 3. MODAL DETALLE VENTA CUBICADA */}
             <Modal show={showModalVenta} onHide={() => setShowModalVenta(false)} centered scrollable>
+                {/* ... keep content ... */}
+                {/* (Este modal no lo toco, solo era referencia) */}
                 <Modal.Header closeButton className="bg-cyan-50 text-cyan-800">
                     <Modal.Title className="h6 fw-bold">
                         <i className="bi bi-layers-half me-2"></i>Desglose Venta Cubicada
@@ -658,6 +785,104 @@ export default function FinanceDashboard({ projectId }) {
                 <Modal.Footer className="py-2 bg-light border-top-0">
                     <small className="text-muted w-100 text-center">Datos según Matriz de Cubicación</small>
                 </Modal.Footer>
+            </Modal>
+
+            {/* 4. MODAL PENDIENTE DE EJECUTAR (2 NIVELES) */}
+            <Modal show={showModalPendiente} onHide={() => setShowModalPendiente(false)} centered size={zonaSeleccionada ? 'lg' : 'md'} scrollable>
+                <Modal.Header closeButton className="bg-orange-50 text-orange-800 border-bottom-0">
+                    <Modal.Title className="h6 fw-bold flex items-center gap-2">
+                        {zonaSeleccionada ? (
+                            <>
+                                <button onClick={() => setZonaSeleccionada(null)} className="btn btn-sm btn-light rounded-circle me-2 p-1" title="Volver">
+                                    <ArrowLeft size={16} />
+                                </button>
+                                <span>{zonaSeleccionada.nombre}</span>
+                                <Badge bg="secondary" className="ms-2">Detalle</Badge>
+                            </>
+                        ) : (
+                            <>
+                                <ClipboardList size={20} className="me-1" />
+                                Saldo por Ejecutar (Por Zona)
+                            </>
+                        )}
+                    </Modal.Title>
+                </Modal.Header>
+
+                <Modal.Body className="p-0">
+                    {!zonaSeleccionada ? (
+                        /* NIVEL 1: LISTA DE ZONAS */
+                        <Table hover striped className="mb-0 small align-middle">
+                            <thead className="bg-light text-secondary sticky-top">
+                                <tr>
+                                    <th className="ps-4 py-3">Zona</th>
+                                    <th className="text-end pe-4 py-3">Saldo Pendiente</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {detallePendienteData.map((item) => (
+                                    <tr
+                                        key={item.id}
+                                        onClick={() => handleZonaClick(item)}
+                                        className="cursor-pointer group hover:bg-orange-50 transition-colors"
+                                        title="Click para ver detalle de actividades"
+                                    >
+                                        <td className="ps-4 py-3 fw-medium text-slate-700 group-hover:text-orange-700 transition-colors">
+                                            {item.nombre}
+                                            <div className="small text-muted fw-normal" style={{ fontSize: '0.75rem' }}>
+                                                Cub: {formatMoney(item.venta)} | Prod: {formatMoney(item.prod)}
+                                            </div>
+                                        </td>
+                                        <td className={`text-end pe-4 font-monospace fw-bold ${item.pendiente >= 0 ? 'text-slate-800' : 'text-red-500'}`}>
+                                            {formatMoney(item.pendiente)}
+                                            {item.pendiente < 0 && <AlertCircle size={12} className="ms-1 text-red-500 inline" />}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot className="bg-light border-top">
+                                <tr>
+                                    <td className="text-end fw-bold text-secondary pe-3 py-3">TOTAL PENDIENTE:</td>
+                                    <td className="text-end pe-4 fw-bold text-orange-700 font-monospace">
+                                        {formatMoney(detallePendienteData.reduce((acc, curr) => acc + curr.pendiente, 0))}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </Table>
+                    ) : (
+                        /* NIVEL 2: DETALLE ACTIVIDADES DE ZONA */
+                        <Table responsive hover className="mb-0 small align-middle">
+                            <thead className="bg-light text-secondary sticky-top">
+                                <tr>
+                                    <th className="ps-4 py-2">Actividad</th>
+                                    <th className="text-center py-2">Precio</th>
+                                    <th className="text-center py-2">Cant.<br />Cub.</th>
+                                    <th className="text-center py-2">Cant.<br />Ejec.</th>
+                                    <th className="text-center py-2 fw-bold">Cant.<br />Pend.</th>
+                                    <th className="text-end pe-4 py-2 fw-bold">Items<br />$ Pendiente</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {detalleZonaData.map((act) => (
+                                    <tr key={act.id}>
+                                        <td className="ps-4 py-2">
+                                            <div className="fw-medium text-slate-700 text-break">{act.nombre}</div>
+                                            <span className="badge bg-light text-secondary border">{act.unit}</span>
+                                        </td>
+                                        <td className="text-center py-2 font-monospace text-muted">{formatMoney(act.precio)}</td>
+                                        <td className="text-center py-2 font-monospace">{Number(act.cub_cant).toLocaleString('es-CL')}</td>
+                                        <td className="text-center py-2 font-monospace text-success">{Number(act.prod_cant).toLocaleString('es-CL')}</td>
+                                        <td className={`text-center py-2 font-monospace fw-bold ${act.pendiente_cant >= 0 ? 'text-slate-800' : 'text-red-500'}`}>
+                                            {Number(act.pendiente_cant).toLocaleString('es-CL')}
+                                        </td>
+                                        <td className={`text-end pe-4 py-2 font-monospace fw-bold ${act.pendiente_monto >= 0 ? 'text-slate-800' : 'text-red-500'}`}>
+                                            {formatMoney(act.pendiente_monto)}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </Table>
+                    )}
+                </Modal.Body>
             </Modal>
         </div>
     );
