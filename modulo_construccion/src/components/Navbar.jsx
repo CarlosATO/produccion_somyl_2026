@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, matchPath } from 'react-router-dom';
+import { Link, useLocation, matchPath, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { proyectosService } from '../services/proyectosService';
 import {
@@ -11,14 +11,47 @@ import {
   TrendingUp,
   Bell,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  Search
 } from 'lucide-react';
 import { tareasService } from '../services/tareasService';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // PROJECT SWITCHER STATE
+  const [allProjects, setAllProjects] = useState([]);
+  const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const [projectSearchTerm, setProjectSearchTerm] = useState('');
+
+  // Cargar lista completa de proyectos para el selector
+  useEffect(() => {
+    if (user) {
+      proyectosService.getProyectos().then(data => {
+        if (Array.isArray(data)) setAllProjects(data)
+      }).catch(err => console.error("Error loading projects list", err))
+    }
+  }, [user]);
+
+  // Handle project switch
+  const handleSwitchProject = (newProjectId) => {
+    setIsProjectMenuOpen(false);
+    setProjectSearchTerm('');
+    // Mantener la sub-ruta actual pero cambiando el ID del proyecto
+    const currentPath = location.pathname;
+    const newPath = currentPath.replace(/\/proyecto\/\d+/, `/proyecto/${newProjectId}`);
+    navigate(newPath);
+  };
+
+  // Filter projects
+  const filteredProjects = allProjects.filter(p =>
+    (p.proyecto || '').toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+    (p.codigo || '').toLowerCase().includes(projectSearchTerm.toLowerCase())
+  );
 
   const [currentProject, setCurrentProject] = useState(null);
   const [avance, setAvance] = useState(0);
@@ -116,16 +149,72 @@ export default function Navbar() {
             {currentProject && <div className="h-6 w-px bg-slate-700 mx-1 hidden md:block"></div>}
 
             {currentProject && (
-              <div className="hidden md:flex flex-col animate-fadeIn leading-tight">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm tracking-wide text-white">
-                    {currentProject.proyecto}
-                  </span>
-                  <span className="bg-slate-800 text-slate-300 text-[10px] px-1.5 py-0.5 rounded border border-slate-700">
+              <div className="hidden md:block relative">
+                <button
+                  onClick={() => setIsProjectMenuOpen(!isProjectMenuOpen)}
+                  className="flex flex-col items-start leading-tight hover:bg-slate-800 rounded px-2 py-1 transition-colors group text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm tracking-wide text-white group-hover:text-blue-400 transition-colors">
+                      {currentProject.proyecto}
+                    </span>
+                    <ChevronDown size={14} className={`text-slate-400 transition-transform ${isProjectMenuOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                  <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded border border-slate-700 mt-0.5 group-hover:border-slate-600 transition-colors">
                     OT: {currentProject.codigo || 'S/N'}
                   </span>
-                </div>
-                {/* Optional minor detail line if needed, or keep it very clean */}
+                </button>
+
+                {/* DROPDOWN MENU */}
+                {isProjectMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsProjectMenuOpen(false)}></div>
+                    <div className="absolute top-full left-0 mt-2 w-72 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                      {/* Search Header */}
+                      <div className="p-2 border-b border-slate-700 bg-slate-900/50">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-2.5 top-2.5 text-slate-500" />
+                          <input
+                            type="text"
+                            placeholder="Buscar proyecto..."
+                            className="w-full bg-slate-900 border border-slate-700 rounded pl-8 pr-2 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                            autoFocus
+                            value={projectSearchTerm}
+                            onChange={(e) => setProjectSearchTerm(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Projects List */}
+                      <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                        {filteredProjects.length > 0 ? (
+                          filteredProjects.map(p => (
+                            <button
+                              key={p.id}
+                              onClick={() => handleSwitchProject(p.id)}
+                              className={`w-full text-left px-3 py-2.5 hover:bg-slate-700/50 transition-colors border-l-2 flex flex-col ${p.id === currentProject.id
+                                  ? 'bg-blue-900/10 border-blue-500'
+                                  : 'border-transparent'
+                                }`}
+                            >
+                              <span className={`text-xs font-bold ${p.id === currentProject.id ? 'text-blue-400' : 'text-slate-200'}`}>
+                                {p.proyecto}
+                              </span>
+                              <span className="text-[10px] text-slate-500 mt-0.5">
+                                OT: {p.codigo || 'S/N'}
+                              </span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="p-4 text-center text-slate-500 text-xs">
+                            No se encontraron proyectos
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
