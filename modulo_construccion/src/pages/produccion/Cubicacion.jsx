@@ -268,14 +268,14 @@ function Cubicacion() {
   const COL_WIDTHS = {
     ITEM: 300,
     PRECIO: 100,
-    TOTAL: 220
+    TOTAL: 120
   };
 
   // Estilo para ocultar flechas de input number
   const noSpinnerStyle = {
     MozAppearance: 'textfield',
     appearance: 'textfield',
-    padding: '0 4px', // Reducir padding interno para ganar espacio
+    padding: '0 4px',
   };
 
   // Estilo base para celdas del BODY (columnas fijas)
@@ -290,6 +290,8 @@ function Cubicacion() {
   const cellStickyTotal = {
     position: 'sticky',
     left: COL_WIDTHS.ITEM + COL_WIDTHS.PRECIO,
+    width: COL_WIDTHS.TOTAL,    // <--- FIX: Asignar ancho explícito
+    minWidth: COL_WIDTHS.TOTAL, // <--- FIX: Evitar colapso
     backgroundColor: '#fffbeb', // Amarillo muy suave
     zIndex: 2,
     borderRight: '3px solid #6c757d'
