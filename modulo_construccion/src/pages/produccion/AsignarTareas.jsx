@@ -450,7 +450,17 @@ function AsignarTareas() {
         e.preventDefault()
         if (taskList.length === 0) return alert("Debes agregar al menos una actividad a la lista.")
 
-        // 1. VALIDACIÓN DE MATERIALES (Bloqueo Estricto)
+        // 1. VALIDACIÓN PREVIA ESTRICTA
+        const proveedorIdFinal = selectedCuadrilla?.value || editingTask?.proveedor_id;
+        if (!proveedorIdFinal) {
+            return alert("⚠️ Debes seleccionar una Cuadrilla / Contratista para asignar la tarea.");
+        }
+
+        if (!startDate || !endDate) {
+            return alert("⚠️ Debes seleccionar un rango de fechas (Inicio y Término).");
+        }
+
+        // 2. VALIDACIÓN DE MATERIALES (Bloqueo Estricto)
         const isExecution = editingTask?.estado && editingTask?.estado !== 'ASIGNADA';
         if (isExecution) {
             // Revisamos si ALGUNO de los items requiere material
@@ -471,19 +481,19 @@ function AsignarTareas() {
             let geoFotoFinalUrl = geoData.fotoUrl;
             if (geoData.foto) geoFotoFinalUrl = await storageService.subirArchivo(geoData.foto);
 
-            if (selectedEP) await estadosPagoService.asignarDueño(selectedEP.value, selectedCuadrilla?.value || editingTask?.proveedor_id)
+            if (selectedEP) await estadosPagoService.asignarDueño(selectedEP.value, proveedorIdFinal)
 
             // Payload Cabecera (La tarea contenedora)
             const payloadTarea = {
                 proyecto_id: Number(projectId),
-                proveedor_id: selectedCuadrilla?.value || editingTask?.proveedor_id,
+                proveedor_id: proveedorIdFinal,
                 trabajador_id: selectedTrabajador?.value || null,
-                zona_id: selectedZona.value,
-                tramo_id: selectedTramo?.value,
-                fecha_asignacion: startDate,
+                zona_id: selectedZona?.value || null, // Asegurar null si no hay zona
+                tramo_id: selectedTramo?.value || null,
+                fecha_asignacion: startDate, // Date object or ISO string
                 fecha_estimada_termino: endDate,
-                archivo_plano_url: fileUrl,
-                comentarios_asignacion: comentarios,
+                archivo_plano_url: fileUrl || null,
+                comentarios_asignacion: comentarios || '',
                 estado_pago_id: editingTask?.estado_pago_id || selectedEP?.value || null,
                 punta_inicio: puntaInicio || null,
                 punta_final: puntaFinal || null,
@@ -492,7 +502,7 @@ function AsignarTareas() {
                 geo_lon: geoData.lon || null,
                 geo_foto_url: geoFotoFinalUrl || null,
 
-                // Valores globales en 0 o resumen (la data real está en los items)
+                // Valores globales en 0 (la data real está en los items)
                 cantidad_asignada: 0,
                 precio_costo_unitario: 0,
                 precio_venta_unitario: 0
@@ -502,15 +512,21 @@ function AsignarTareas() {
                 if (!editingTask.fecha_termino_real) payloadTarea.fecha_termino_real = new Date()
             }
 
-            // Payload Items (El detalle)
+            // Payload Items (El detalle) - Sanitización Importante
             const payloadItems = taskList.map(item => ({
                 actividad_id: item.type === 'ACT' ? item.value : null,
                 sub_actividad_id: item.type === 'SUB' ? item.value : null,
-                cantidad_asignada: item.cantidad_asignada,
-                cantidad_real: item.cantidad_real,
-                precio_costo: item.precio_costo,
-                precio_venta: item.precio_venta
+                cantidad_asignada: Number(item.cantidad_asignada) || 0,
+                cantidad_real: Number(item.cantidad_real) || 0,
+                precio_costo: Number(item.precio_costo) || 0,
+                precio_venta: Number(item.precio_venta) || 0
             }))
+
+            // Validar Items: Al menos uno debe tener ID válido
+            const itemsInvalidos = payloadItems.filter(i => !i.actividad_id && !i.sub_actividad_id);
+            if (itemsInvalidos.length > 0) {
+                throw new Error("Hay items sin actividad/subactividad definida.");
+            }
 
             // Llamamos al servicio actualizado (que maneja cabecera + items)
             if (isEditing) {
@@ -524,7 +540,10 @@ function AsignarTareas() {
             loadInitialData()
             // Notificar cambios globales (Navbar alert)
             window.dispatchEvent(new CustomEvent('kanban-updated'));
-        } catch (err) { alert('Error guardando'); console.error(err) }
+        } catch (err) {
+            console.error("Error guardando tarea:", err);
+            alert('Error al guardar: ' + (err.message || 'Verifica los datos'));
+        }
         finally { setUploading(false) }
     }
 

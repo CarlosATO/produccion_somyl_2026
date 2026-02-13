@@ -206,11 +206,15 @@ export const tareasService = {
 
   // Obtener tareas por estado (para alertas)
   async getTareasPorEstado(proyectoId, estado) {
+    if (!proyectoId || !estado) return []
+    // Limpieza defensiva del estado (por si acaso llega con sufijos raros)
+    const estadoLimpio = String(estado).split(':')[0].trim();
+
     const { data, error } = await supabase
       .from('prod_tareas')
       .select('id, updated_at, estado, proveedor:proveedores(nombre)')
       .eq('proyecto_id', proyectoId)
-      .eq('estado', estado)
+      .eq('estado', estadoLimpio)
 
     if (error) {
       console.error('Error getTareasPorEstado:', error)
