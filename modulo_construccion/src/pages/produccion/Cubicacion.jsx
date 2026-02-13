@@ -266,9 +266,15 @@ function Cubicacion() {
   //  ESTILOS TABLA - COLUMNAS FIJAS Y BORDES
   // ==========================================
   const COL_WIDTHS = {
-    ITEM: 280,
-    PRECIO: 80,
-    TOTAL: 140
+    ITEM: 300,
+    PRECIO: 100,
+    TOTAL: 160
+  };
+
+  // Estilo para ocultar flechas de input number
+  const noSpinnerStyle = {
+    MozAppearance: 'textfield',
+    appearance: 'textfield',
   };
 
   // Estilo base para celdas del BODY (columnas fijas)
@@ -312,6 +318,16 @@ function Cubicacion() {
 
   return (
     <div className="container-fluid py-2 px-3 bg-light min-vh-100 d-flex flex-column">
+      <style>{`
+        .no-spinner::-webkit-inner-spin-button, 
+        .no-spinner::-webkit-outer-spin-button { 
+          -webkit-appearance: none; 
+          margin: 0; 
+        }
+        .no-spinner {
+          -moz-appearance: textfield;
+        }
+      `}</style>
 
       {/* HEADER & TITULO */}
       <div className="d-flex justify-content-between align-items-center mb-2">
@@ -425,8 +441,8 @@ function Cubicacion() {
                   <td style={cellStickyTotal} className="p-0 border-bottom border-end">
                     <input
                       type="number"
-                      className="form-control form-control-sm border-0 text-center fw-bold font-monospace bg-transparent"
-                      style={{ fontSize: '0.9rem', color: '#000' }}
+                      className="form-control form-control-sm border-0 text-center fw-bold font-monospace bg-transparent no-spinner"
+                      style={{ fontSize: '0.9rem', color: '#000', ...noSpinnerStyle }}
                       placeholder="-"
                       defaultValue={getTotalFila(act.id, 'ACT') || ''}
                       onBlur={(e) => handleSaveTotal(e.target.value, act, 'ACT')}
@@ -438,8 +454,8 @@ function Cubicacion() {
                       <td key={z.id} className="p-0 border-bottom border-start">
                         <input
                           type="number"
-                          className={`form-control form-control-sm border-0 text-center bg-transparent ${val > 0 ? 'fw-bold text-primary' : 'text-muted'}`}
-                          style={{ fontSize: '0.85rem' }}
+                          className={`form-control form-control-sm border-0 text-center bg-transparent no-spinner ${val > 0 ? 'fw-bold text-primary' : 'text-muted'}`}
+                          style={{ fontSize: '0.85rem', ...noSpinnerStyle }}
                           placeholder="-"
                           defaultValue={val || ''}
                           onBlur={(e) => handleSaveCell(e.target.value, z.id, act, 'ACT')}
@@ -468,8 +484,8 @@ function Cubicacion() {
                     <td style={{ ...cellStickyTotal, backgroundColor: '#fafafa' }} className="p-0 border-bottom border-end">
                       <input
                         type="number"
-                        className="form-control form-control-sm border-0 text-center fw-semibold font-monospace bg-transparent"
-                        style={{ fontSize: '0.85rem' }}
+                        className="form-control form-control-sm border-0 text-center fw-semibold font-monospace bg-transparent no-spinner"
+                        style={{ fontSize: '0.85rem', ...noSpinnerStyle }}
                         placeholder="-"
                         defaultValue={getTotalFila(sub.id, 'SUB') || ''}
                         onBlur={(e) => handleSaveTotal(e.target.value, sub, 'SUB')}
@@ -481,8 +497,8 @@ function Cubicacion() {
                         <td key={z.id} className="p-0 border-bottom border-start" style={{ backgroundColor: '#fafafa' }}>
                           <input
                             type="number"
-                            className={`form-control form-control-sm border-0 text-center bg-transparent ${val > 0 ? 'fw-semibold' : 'text-muted'}`}
-                            style={{ fontSize: '0.8rem' }}
+                            className={`form-control form-control-sm border-0 text-center bg-transparent no-spinner ${val > 0 ? 'fw-semibold' : 'text-muted'}`}
+                            style={{ fontSize: '0.8rem', ...noSpinnerStyle }}
                             placeholder="-"
                             defaultValue={val || ''}
                             onBlur={(e) => handleSaveCell(e.target.value, z.id, sub, 'SUB')}
