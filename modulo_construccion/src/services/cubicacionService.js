@@ -52,15 +52,37 @@ export const cubicacionService = {
     if (payload.actividad_id) delete payload.sub_actividad_id
     else delete payload.actividad_id
 
-    const { data, error } = await supabase
-      .from('prod_cubicaciones')
-      .upsert(payload, {
-        onConflict: payload.actividad_id ? 'proyecto_id, zona_id, actividad_id' : 'proyecto_id, zona_id, sub_actividad_id'
-      })
-      .select()
+    try {
+      const { data, error } = await supabase
+        .from('prod_cubicaciones')
+        .upsert(payload, {
+          onConflict: payload.actividad_id ? 'zona_id, actividad_id' : 'zona_id, sub_actividad_id'
+        })
+        .select()
 
-    if (error) throw error
-    return data
+      if (error) throw error
+      return data
+    } catch (err) {
+      console.warn("Upsert failed, trying manual delete+insert fallback", err)
+
+      // Fallback: Borrar anterior (si existe) e insertar nuevo
+      const match = {
+        proyecto_id: payload.proyecto_id,
+        zona_id: payload.zona_id
+      }
+      if (payload.actividad_id) match.actividad_id = payload.actividad_id
+      else match.sub_actividad_id = payload.sub_actividad_id
+
+      await supabase.from('prod_cubicaciones').delete().match(match)
+
+      const { data, error } = await supabase
+        .from('prod_cubicaciones')
+        .insert(payload)
+        .select()
+
+      if (error) throw error
+      return data
+    }
   },
 
   // Borra todo lo de este proyecto

@@ -114,11 +114,16 @@ function Cubicacion() {
 
   // Guardar ZONA -> Solo guarda el valor de la zona (Total se recalcula solo)
   const handleSaveCell = async (val, zonaId, item, type) => {
-    const nuevaCantidad = Number(val) || 0
+    // Reemplazar coma por punto para soporte de decimales en español
+    const cleanVal = String(val).replace(',', '.')
+    const nuevaCantidad = parseFloat(cleanVal) || 0
 
     // 1. UPDATE OPTIMISTA
     const newCubsState = [...cubicaciones]
-    const idxZona = newCubsState.findIndex(c => c.zona_id === zonaId && (type === 'ACT' ? c.actividad_id === item.id : c.sub_actividad_id === item.id))
+    const idxZona = newCubsState.findIndex(c =>
+      c.zona_id === zonaId &&
+      (type === 'ACT' ? c.actividad_id === item.id : c.sub_actividad_id === item.id)
+    )
 
     if (idxZona >= 0) {
       newCubsState[idxZona] = { ...newCubsState[idxZona], cantidad: nuevaCantidad }
@@ -145,14 +150,10 @@ function Cubicacion() {
       else payloadZona.sub_actividad_id = item.id
 
       await cubicacionService.guardarCubicacion(payloadZona)
-
-      // Opcional: Recarga silenciosa
-      // const finalCubs = await cubicacionService.getCubicaciones(projectId)
-      // setCubicaciones(finalCubs)
     } catch (err) {
       console.error("Error saving cell", err)
-      alert("Error al guardar. Recargando...")
-      loadAllData()
+      alert("No se pudo guardar la cantidad. Verifique su conexión o contacte a soporte.")
+      loadAllData() // Revertir a estado real del servidor
     }
   }
 
